@@ -53,7 +53,7 @@ bool BlockMergePass::MergeBlocks(ir::Function* func) {
   bool modified = false;
   for (auto bi = func->begin(); bi != func->end(); ) {
     // Do not merge loop header blocks, at least for now.
-    if (IsLoopHeader(&*bi)) {
+    if (bi->IsLoopHeader()) {
       ++bi;
       continue;
     }
