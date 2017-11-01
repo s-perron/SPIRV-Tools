@@ -16,6 +16,7 @@
 
 #include "common_uniform_elim_pass.h"
 #include "cfa.h"
+#include "ir_context.h"
 
 namespace spvtools {
 namespace opt {
@@ -510,8 +511,8 @@ bool CommonUniformElimPass::EliminateCommonUniform(ir::Function* func) {
   return modified;
 }
 
-void CommonUniformElimPass::Initialize(ir::Module* module) {
-  InitializeProcessing(module);
+void CommonUniformElimPass::Initialize(ir::IRContext* c) {
+  InitializeProcessing(c);
 
   // Clear collections.
   comp2idx2inst_.clear();
@@ -564,8 +565,8 @@ Pass::Status CommonUniformElimPass::ProcessImpl() {
 
 CommonUniformElimPass::CommonUniformElimPass() {}
 
-Pass::Status CommonUniformElimPass::Process(ir::Module* module) {
-  Initialize(module);
+Pass::Status CommonUniformElimPass::Process(ir::IRContext* c) {
+  Initialize(c);
   return ProcessImpl();
 }
 

@@ -345,8 +345,8 @@ bool DeadBranchElimPass::EliminateDeadBranches(ir::Function* func) {
   return modified;
 }
 
-void DeadBranchElimPass::Initialize(ir::Module* module) {
-  InitializeProcessing(module);
+void DeadBranchElimPass::Initialize(ir::IRContext* c) {
+  InitializeProcessing(c);
 
   // Initialize extension whitelist
   InitExtensions();
@@ -387,7 +387,7 @@ Pass::Status DeadBranchElimPass::ProcessImpl() {
 
 DeadBranchElimPass::DeadBranchElimPass() {}
 
-Pass::Status DeadBranchElimPass::Process(ir::Module* module) {
+Pass::Status DeadBranchElimPass::Process(ir::IRContext* module) {
   Initialize(module);
   return ProcessImpl();
 }

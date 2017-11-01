@@ -849,13 +849,14 @@ bool MemPass::CFGCleanup(ir::Function* func) {
   return modified;
 }
 
+
 void MemPass::InitializeCFGCleanup(ir::Module* module) {
   // Build a map between SSA names to the block they are defined in.
   //
   // TODO(dnovillo): This is expensive and unnecessary if ir::Instruction
   // instances could figure out what basic block they belong to. Remove this
   // once this is possible.
-  for (auto& fn : *module) {
+  for (auto& fn : *c->module()) {
     for (auto& block : fn) {
       block.ForEachInst([this, &block](ir::Instruction* inst) {
         uint32_t result_id = inst->result_id();
