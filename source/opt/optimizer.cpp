@@ -384,6 +384,8 @@ bool Optimizer::RegisterPassFromFlag(const std::string& flag) {
     RegisterPass(CreateWorkaround1209Pass());
   } else if (pass_name == "replace-invalid-opcode") {
     RegisterPass(CreateReplaceInvalidOpcodePass());
+  } else if (pass_name == "inst-bindless-check") {
+    RegisterPass(CreateInstBindlessCheckPass());
   } else if (pass_name == "simplify-instructions") {
     RegisterPass(CreateSimplificationPass());
   } else if (pass_name == "ssa-rewrite") {
@@ -749,4 +751,10 @@ Optimizer::PassToken CreateCombineAccessChainsPass() {
   return MakeUnique<Optimizer::PassToken::Impl>(
       MakeUnique<opt::CombineAccessChains>());
 }
+
+Optimizer::PassToken CreateInstBindlessCheckPass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::InstBindlessCheckPass>());
+}
+
 }  // namespace spvtools
