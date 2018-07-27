@@ -63,6 +63,10 @@ class InstBindlessCheckPass : public InstrumentPass {
      BasicBlock::iterator ref_inst_itr,
      UptrVectorIterator<BasicBlock> ref_block_itr);
 
+   // Generate instructions which will write a record to the end of the debug
+   // output buffer.
+   void GenDebugOutputCode();
+
    // Instrument all bindless references in func. Specifically,
    // generate code to check that the index into the descriptor array is
    // in-bounds. If Vk_Ext_Descriptor_Indexing is enabled, also check that the

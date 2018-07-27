@@ -19,6 +19,11 @@
 static const int kSpvImageSampleImageIdInIdx = 0;
 static const int kSpvSampledImageImageIdInIdx = 0;
 static const int kSpvLoadPtrIdInIdx = 0;
+static const int kSpvAccessChainBaseIdInIdx = 0;
+static const int kSpvAccessChainIndex0IdInIdx = 0;
+static const int kSpvTypePointerTypeIdInIdx = 0;
+static const int kSpvTypeArrayLengthIdInIdx = 1;
+static const int kSpvConstantValueInIdx = 0;
 
 namespace spvtools {
 namespace opt {
@@ -49,11 +54,65 @@ bool InstBindlessCheckPass::NeedsBindlessChecking(const Instruction* inst) {
   return ptrInst->opcode() == SpvOp::SpvOpAccessChain;
 }
 
+void InstBindlessCheckPass::GenDebugOutputCode() {
+
+}
+
 void InstBindlessCheckPass::GenBindlessCheckCode(
-  std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-  std::vector<std::unique_ptr<Instruction>>* new_vars,
-  BasicBlock::iterator ref_inst_itr,
-  UptrVectorIterator<BasicBlock> ref_block_itr) {
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::vector<std::unique_ptr<Instruction>>* new_vars,
+    BasicBlock::iterator ref_inst_itr,
+    UptrVectorIterator<BasicBlock> ref_block_itr) {
+  uint32_t imageId;
+  switch (ref_inst_itr->opcode()) {
+    // TODO(greg-lunarg): Add all other descriptor-based references
+  case SpvOp::SpvOpImageSampleImplicitLod:
+  case SpvOp::SpvOpImageSampleExplicitLod:
+    imageId =
+        ref_inst_itr->GetSingleWordInOperand(kSpvImageSampleImageIdInIdx);
+    break;
+  default:
+    assert(false && "unexpected bindless instruction");
+  }
+  Instruction* imageInst = get_def_use_mgr()->GetDef(imageId);
+  if (imageInst->opcode() == SpvOp::SpvOpSampledImage) {
+    imageId = imageInst->GetSingleWordInOperand(kSpvSampledImageImageIdInIdx);
+    imageInst = get_def_use_mgr()->GetDef(imageId);
+  }
+  assert(imageInst->opcode() == SpvOp::SpvOpLoad && "missing bindless load");
+  uint32_t ptrId = imageInst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
+  Instruction* ptrInst = get_def_use_mgr()->GetDef(ptrId);
+  if (ptrInst->opcode() == SpvOp::SpvOpAccessChain) {
+    // Check index against upper bound
+    assert(ptrInst->NumInOperands() == 2 &&
+        "unexpected bindless index number");
+    uint32_t indexId =
+        ptrInst->GetSingleWordInOperand(kSpvAccessChainIndex0IdInIdx);
+    Instruction* indexInst = get_def_use_mgr()->GetDef(indexId);
+    ptrId = ptrInst->GetSingleWordInOperand(kSpvAccessChainBaseIdInIdx);
+    ptrInst = get_def_use_mgr()->GetDef(ptrId);
+    assert(ptrInst->opcode() == SpvOpVariable);
+    uint32_t varTypeId = ptrInst->type_id();
+    Instruction* varTypeInst = get_def_use_mgr()->GetDef(varTypeId);
+    assert(varTypeInst->opcode() == SpvOpTypePointer);
+    uint32_t ptrTypeId =
+        varTypeInst->GetSingleWordInOperand(kSpvTypePointerTypeIdInIdx);
+    Instruction* ptrTypeInst = get_def_use_mgr()->GetDef(ptrTypeId);
+    // TODO(greg-lunarg): Support runtime array
+    assert(ptrTypeInst->opcode() == SpvOpTypeArray);
+    uint32_t lengthId =
+        ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
+    Instruction* lengthInst = get_def_use_mgr()->GetDef(lengthId);
+    if (indexInst->opcode() == SpvOpConstant &&
+        lengthInst->opcode() == SpvOpConstant) {
+      if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
+          lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx))
+        GenDebugOutputCode();
+    }
+    else {
+
+    }
+  }
 }
 
 bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
