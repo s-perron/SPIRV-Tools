@@ -49,12 +49,12 @@ class InstBindlessCheckPass : public InstrumentPass {
    bool NeedsBindlessChecking(const Instruction* inst);
 
    // Return in new_blocks the result of instrumenting the bindless reference
-   // at ref_inst_itr within its block at ref_block_itr. The block at ref_block_itr can
-   // just be replaced with the blocks in new_blocks. Any additional branches
-   // are avoided. Note that the first block in new_blocks retains the label
-   // of the original calling block. Also note that if an exit block is
-   // created, it is the last block of new_blocks.
-   //
+   // at ref_inst_itr within its block at ref_block_itr. The block at
+   // ref_block_itr can just be replaced with the blocks in new_blocks.
+   // new_blocks will contain at least two blocks. The last block will
+   // contain all instructions following the instruction being instrumented.
+   // Note that the first block in new_blocks retains the label
+   // of the original calling block.
    // Also return in new_vars additional OpVariable instructions required by
    // and to be inserted into the function after the block at
    // ref_block_itr is replaced with new_blocks.

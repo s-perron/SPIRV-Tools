@@ -49,7 +49,8 @@ bool InstBindlessCheckPass::NeedsBindlessChecking(const Instruction* inst) {
   return ptrInst->opcode() == SpvOp::SpvOpAccessChain;
 }
 
-void InstBindlessCheckPass::GenBindlessCheckCode(std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+void InstBindlessCheckPass::GenBindlessCheckCode(
+  std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
   std::vector<std::unique_ptr<Instruction>>* new_vars,
   BasicBlock::iterator ref_inst_itr,
   UptrVectorIterator<BasicBlock> ref_block_itr) {
@@ -65,26 +66,22 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
         std::vector<std::unique_ptr<BasicBlock>> newBlocks;
         std::vector<std::unique_ptr<Instruction>> newVars;
         GenBindlessCheckCode(&newBlocks, &newVars, ii, bi);
-        // If call block is replaced with more than one block, point
-        // succeeding phis at new last block.
-        if (newBlocks.size() > 1) UpdateSucceedingPhis(newBlocks);
-        // Replace old calling block with new block(s).
-
-        // We need to kill the name and decorations for the call, which
-        // will be deleted.  Other instructions in the block will be moved to
-        // newBlocks.  We don't need to do anything with those.
-        context()->KillNamesAndDecorates(&*ii);
-
+        // Update succeeding phis with label of new last block.
+        size_t newBlocksSize = newBlocks.size();
+        assert(newBlocksSize > 1);
+        UpdateSucceedingPhis(newBlocks);
+        // Replace original block with new block(s).
         bi = bi.Erase();
-
         for (auto& bb : newBlocks) {
           bb->SetParent(func);
         }
         bi = bi.InsertBefore(&newBlocks);
+        // Reset block iterator to last new block
+        for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
         // Insert new function variables.
         if (newVars.size() > 0)
           func->begin()->begin().InsertBefore(std::move(newVars));
-        // Restart inlining at beginning of calling block.
+        // Restart instrumenting at beginning of last new block.
         ii = bi->begin();
         modified = true;
       } else {
@@ -112,6 +109,7 @@ Pass::Status InstBindlessCheckPass::ProcessImpl() {
   // Attempt exhaustive inlining on each entry point function in module
   ProcessFunction pfn = [this](Function* fp) { return InstBindlessCheck(fp); };
   bool modified = ProcessEntryPointCallTree(pfn, get_module());
+  // TODO(greg-lunarg): If modified, do CFGCleanup
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
 
