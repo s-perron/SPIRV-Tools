@@ -28,34 +28,7 @@ static const int kSpvConstantValueInIdx = 0;
 namespace spvtools {
 namespace opt {
 
-bool InstBindlessCheckPass::NeedsBindlessChecking(const Instruction* inst) {
-  uint32_t imageId;
-  switch (inst->opcode()) {
-    // TODO(greg-lunarg): Add all other descriptor-based references
-    case SpvOp::SpvOpImageSampleImplicitLod:
-    case SpvOp::SpvOpImageSampleExplicitLod:
-      imageId = inst->GetSingleWordInOperand(kSpvImageSampleImageIdInIdx);
-      break;
-    default:
-      return false;
-  }
-  // If VK_EXT_descriptor_indexing is defined, all descriptors need to
-  // be checked if they are written.
-  if (ext_descriptor_indexing_defined_)
-    return true;
-  Instruction* imageInst = get_def_use_mgr()->GetDef(imageId);
-  if (imageInst->opcode() == SpvOp::SpvOpSampledImage) {
-    imageId = imageInst->GetSingleWordInOperand(kSpvSampledImageImageIdInIdx);
-    imageInst = get_def_use_mgr()->GetDef(imageId);
-  }
-  assert(imageInst->opcode() == SpvOp::SpvOpLoad);
-  uint32_t ptrId = imageInst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
-  Instruction* ptrInst = get_def_use_mgr()->GetDef(ptrId);
-  return ptrInst->opcode() == SpvOp::SpvOpAccessChain;
-}
-
 void InstBindlessCheckPass::GenDebugOutputCode() {
-
 }
 
 void InstBindlessCheckPass::GenBindlessCheckCode(
@@ -63,68 +36,96 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     std::vector<std::unique_ptr<Instruction>>* new_vars,
     BasicBlock::iterator ref_inst_itr,
     UptrVectorIterator<BasicBlock> ref_block_itr) {
+  std::unique_ptr<BasicBlock> new_blk_ptr;
   uint32_t imageId;
   switch (ref_inst_itr->opcode()) {
     // TODO(greg-lunarg): Add all other descriptor-based references
-  case SpvOp::SpvOpImageSampleImplicitLod:
-  case SpvOp::SpvOpImageSampleExplicitLod:
-    imageId =
-        ref_inst_itr->GetSingleWordInOperand(kSpvImageSampleImageIdInIdx);
-    break;
-  default:
-    assert(false && "unexpected bindless instruction");
+    case SpvOp::SpvOpImageSampleImplicitLod:
+    case SpvOp::SpvOpImageSampleExplicitLod:
+      imageId =
+          ref_inst_itr->GetSingleWordInOperand(kSpvImageSampleImageIdInIdx);
+      break;
+    default:
+      return;
   }
   Instruction* imageInst = get_def_use_mgr()->GetDef(imageId);
   if (imageInst->opcode() == SpvOp::SpvOpSampledImage) {
     imageId = imageInst->GetSingleWordInOperand(kSpvSampledImageImageIdInIdx);
     imageInst = get_def_use_mgr()->GetDef(imageId);
   }
-  assert(imageInst->opcode() == SpvOp::SpvOpLoad && "missing bindless load");
+  if (imageInst->opcode() != SpvOp::SpvOpLoad) {
+    assert(false && "unexpected image value");
+    return;
+  }
   uint32_t ptrId = imageInst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
   Instruction* ptrInst = get_def_use_mgr()->GetDef(ptrId);
-  if (ptrInst->opcode() == SpvOp::SpvOpAccessChain) {
-    // Check index against upper bound
-    assert(ptrInst->NumInOperands() == 2 &&
-        "unexpected bindless index number");
-    uint32_t indexId =
-        ptrInst->GetSingleWordInOperand(kSpvAccessChainIndex0IdInIdx);
-    Instruction* indexInst = get_def_use_mgr()->GetDef(indexId);
-    ptrId = ptrInst->GetSingleWordInOperand(kSpvAccessChainBaseIdInIdx);
-    ptrInst = get_def_use_mgr()->GetDef(ptrId);
-    assert(ptrInst->opcode() == SpvOpVariable);
-    uint32_t varTypeId = ptrInst->type_id();
-    Instruction* varTypeInst = get_def_use_mgr()->GetDef(varTypeId);
-    assert(varTypeInst->opcode() == SpvOpTypePointer);
-    uint32_t ptrTypeId =
-        varTypeInst->GetSingleWordInOperand(kSpvTypePointerTypeIdInIdx);
-    Instruction* ptrTypeInst = get_def_use_mgr()->GetDef(ptrTypeId);
-    // TODO(greg-lunarg): Support runtime array
-    assert(ptrTypeInst->opcode() == SpvOpTypeArray);
-    uint32_t lengthId =
-        ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
-    Instruction* lengthInst = get_def_use_mgr()->GetDef(lengthId);
-    if (indexInst->opcode() == SpvOpConstant &&
-        lengthInst->opcode() == SpvOpConstant) {
-      if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
-          lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx))
-        GenDebugOutputCode();
+  // TODO(greg-lunarg): Check non-indexed descriptor refs
+  if (ptrInst->opcode() != SpvOp::SpvOpAccessChain)
+    return;
+  // Check index against upper bound
+  if (ptrInst->NumInOperands() != 2) {
+    assert(false && "unexpected bindless index number");
+    return;
+  }
+  uint32_t indexId =
+      ptrInst->GetSingleWordInOperand(kSpvAccessChainIndex0IdInIdx);
+  Instruction* indexInst = get_def_use_mgr()->GetDef(indexId);
+  ptrId = ptrInst->GetSingleWordInOperand(kSpvAccessChainBaseIdInIdx);
+  ptrInst = get_def_use_mgr()->GetDef(ptrId);
+  if (ptrInst->opcode() == SpvOpVariable) {
+    assert(false && "unexpected bindless base");
+    return;
+  }
+  uint32_t varTypeId = ptrInst->type_id();
+  Instruction* varTypeInst = get_def_use_mgr()->GetDef(varTypeId);
+  uint32_t ptrTypeId =
+      varTypeInst->GetSingleWordInOperand(kSpvTypePointerTypeIdInIdx);
+  Instruction* ptrTypeInst = get_def_use_mgr()->GetDef(ptrTypeId);
+  // TODO(greg-lunarg): Support runtime array
+  if (ptrTypeInst->opcode() != SpvOpTypeArray)
+    return;
+  uint32_t lengthId =
+      ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
+  Instruction* lengthInst = get_def_use_mgr()->GetDef(lengthId);
+  // If index and bound both compile-time constants and index >= bound,
+  // just generate debug output code. Otherwise generate bounds test
+  // code. True branch is full reference; false branch is debug output.
+  if (indexInst->opcode() == SpvOpConstant &&
+      lengthInst->opcode() == SpvOpConstant) {
+    if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
+        lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx)) {
+      GenPreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
+      GenDebugOutputCode();
     }
-    else {
-
-    }
+  }
+  else {
+    GenPreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
+    analysis::Bool boolTy;
+    uint32_t boolTyId = context()->get_type_mgr()->GetTypeInstruction(&boolTy);
+    uint32_t ultId = AddBinaryOp(boolTyId, SpvOpULessThan, indexId, lengthId,
+        &new_blk_ptr);
+    uint32_t mergeBlkId = TakeNextId();
+    uint32_t validBlkId = TakeNextId();
+    uint32_t invalidBlkId = TakeNextId();
+    AddSelectionMerge(mergeBlkId, SpvSelectionControlMaskNone, &new_blk_ptr);
+    AddBranchCond(ultId, validBlkId, invalidBlkId, &new_blk_ptr);
+    new_blocks->push_back(std::move(new_blk_ptr));
+    // Gen valid code block
+    new_blk_ptr.reset(new BasicBlock(NewLabel(validBlkId)));
   }
 }
 
 bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
   bool modified = false;
+  std::vector<std::unique_ptr<BasicBlock>> newBlocks;
+  std::vector<std::unique_ptr<Instruction>> newVars;
   // Using block iterators here because of block erasures and insertions.
   for (auto bi = func->begin(); bi != func->end(); ++bi) {
+    preCallSB_.clear();
+    postCallSB_.clear();
     for (auto ii = bi->begin(); ii != bi->end();) {
-      if (NeedsBindlessChecking(&*ii)) {
-        // Instrument call.
-        std::vector<std::unique_ptr<BasicBlock>> newBlocks;
-        std::vector<std::unique_ptr<Instruction>> newVars;
-        GenBindlessCheckCode(&newBlocks, &newVars, ii, bi);
+      GenBindlessCheckCode(&newBlocks, &newVars, ii, bi);
+      if (newBlocks.size() > 0) {
         // Update succeeding phis with label of new last block.
         size_t newBlocksSize = newBlocks.size();
         assert(newBlocksSize > 1);
@@ -140,9 +141,11 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
         // Insert new function variables.
         if (newVars.size() > 0)
           func->begin()->begin().InsertBefore(std::move(newVars));
+        modified = true;
         // Restart instrumenting at beginning of last new block.
         ii = bi->begin();
-        modified = true;
+        assert(newBlocks.size() == 0);
+        assert(newVars.size() == 0);
       } else {
         ++ii;
       }

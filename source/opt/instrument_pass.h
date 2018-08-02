@@ -43,6 +43,25 @@ class InstrumentPass : public Pass {
  protected:
   InstrumentPass();
 
+  // Move all code in |ref_block_itr| preceding the instruction |ref_inst_itr|
+  // to be instrumented into block |new_blk_ptr|.
+  void GenPreludeCode(BasicBlock::iterator ref_inst_itr,
+    UptrVectorIterator<BasicBlock> ref_block_itr,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Add binary instruction |type_id, opcode, operand1, operand2| to
+  // |block_ptr| and return resultId.
+  uint32_t InstrumentPass::AddBinaryOp(
+    uint32_t type_id, SpvOp opcode,
+    uint32_t operand1, uint32_t operand2,
+    std::unique_ptr<BasicBlock>* block_ptr);
+
+  // Add SelectionMerge instruction |mergeBlockId, selectionControl| to
+  // |block_ptr|.
+  void InstrumentPass::AddSelectionMerge(
+    uint32_t mergeBlockId, uint32_t selectionControl,
+    std::unique_ptr<BasicBlock>* block_ptr);
+
   // Add pointer to type to module and return resultId.
   uint32_t AddPointerToType(uint32_t type_id, SpvStorageClass storage_class);
 
@@ -180,6 +199,12 @@ class InstrumentPass : public Pass {
   // different way in the inliner. Can these be consolidated?
   std::unordered_map<const BasicBlock*, std::vector<BasicBlock*>>
       block2structured_succs_;
+
+  // Pre-instrumentation same-block insts
+  std::unordered_map<uint32_t, Instruction*> preCallSB_;
+
+  // Post-instrumentation same-block op ids
+  std::unordered_map<uint32_t, uint32_t> postCallSB_;
 };
 
 }  // namespace opt

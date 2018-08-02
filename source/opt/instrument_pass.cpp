@@ -29,6 +29,48 @@ static const int kSpvLoopMergeContinueTargetIdInIdx = 1;
 namespace spvtools {
 namespace opt {
 
+  void InstrumentPass::GenPreludeCode(
+    BasicBlock::iterator ref_inst_itr,
+    UptrVectorIterator<BasicBlock> ref_block_itr,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    new_blk_ptr->reset(new BasicBlock(NewLabel(ref_block_itr->id())));
+    // Copy contents of original ref block up to ref instruction.
+    for (auto cii = ref_block_itr->begin(); cii != ref_inst_itr;
+      cii = ref_block_itr->begin()) {
+      Instruction* inst = &*cii;
+      inst->RemoveFromList();
+      std::unique_ptr<Instruction> mv_ptr(inst);
+      // Remember same-block ops for possible regeneration.
+      if (IsSameBlockOp(&*mv_ptr)) {
+        auto* sb_inst_ptr = mv_ptr.get();
+        preCallSB_[mv_ptr->result_id()] = sb_inst_ptr;
+      }
+      (*new_blk_ptr)->AddInstruction(std::move(mv_ptr));
+    }
+  }
+
+uint32_t InstrumentPass::AddBinaryOp(uint32_t type_id, SpvOp opcode,
+                                     uint32_t operand1, uint32_t operand2,
+                                     std::unique_ptr<BasicBlock>* block_ptr) {
+  uint32_t resultId = TakeNextId();
+  std::unique_ptr<Instruction> newBinOp(
+      new Instruction(context(), opcode, type_id, resultId,
+      { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+        { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
+  (*block_ptr)->AddInstruction(std::move(newBinOp));
+  return resultId;
+}
+
+void InstrumentPass::AddSelectionMerge(
+  uint32_t mergeBlockId, uint32_t selControl,
+  std::unique_ptr<BasicBlock>* block_ptr) {
+  std::unique_ptr<Instruction> newSMInst(
+    new Instruction(context(), SpvOpSelectionMerge, 0, 0,
+      {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {mergeBlockId}},
+       {spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER, {selControl}}}));
+  (*block_ptr)->AddInstruction(std::move(newSMInst));
+}
+
 uint32_t InstrumentPass::AddPointerToType(uint32_t type_id,
                                       SpvStorageClass storage_class) {
   uint32_t resultId = TakeNextId();

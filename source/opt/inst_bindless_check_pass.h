@@ -42,12 +42,6 @@ class InstBindlessCheckPass : public InstrumentPass {
    // Initialize state for instrumenting bindless checking
    void InitializeInstBindlessCheck();
 
-   // Return true if |inst| needs bindless checking. Specifically, it is
-   // a direct memory reference and its descriptor is loaded from a
-   // descriptor array element or VK_EXT_descriptor_indexing is enabled
-   // which means the descriptor may not be written.
-   bool NeedsBindlessChecking(const Instruction* inst);
-
    // Return in new_blocks the result of instrumenting the bindless reference
    // at ref_inst_itr within its block at ref_block_itr. The block at
    // ref_block_itr can just be replaced with the blocks in new_blocks.
@@ -77,6 +71,7 @@ class InstBindlessCheckPass : public InstrumentPass {
 
   Pass::Status ProcessImpl();
 
+  // True if VK_EXT_descriptor_indexing is defined
   bool ext_descriptor_indexing_defined_;
 };
 
