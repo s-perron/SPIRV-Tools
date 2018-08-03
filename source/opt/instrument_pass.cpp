@@ -29,7 +29,7 @@ static const int kSpvLoopMergeContinueTargetIdInIdx = 1;
 namespace spvtools {
 namespace opt {
 
-  void InstrumentPass::GenPreludeCode(
+  void InstrumentPass::MovePreludeCode(
     BasicBlock::iterator ref_inst_itr,
     UptrVectorIterator<BasicBlock> ref_block_itr,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {

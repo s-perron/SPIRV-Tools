@@ -45,7 +45,7 @@ class InstrumentPass : public Pass {
 
   // Move all code in |ref_block_itr| preceding the instruction |ref_inst_itr|
   // to be instrumented into block |new_blk_ptr|.
-  void GenPreludeCode(BasicBlock::iterator ref_inst_itr,
+  void MovePreludeCode(BasicBlock::iterator ref_inst_itr,
     UptrVectorIterator<BasicBlock> ref_block_itr,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 

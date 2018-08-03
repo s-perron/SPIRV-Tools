@@ -37,21 +37,28 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     BasicBlock::iterator ref_inst_itr,
     UptrVectorIterator<BasicBlock> ref_block_itr) {
   std::unique_ptr<BasicBlock> new_blk_ptr;
-  uint32_t imageId;
+  uint32_t sampledImageId;
   switch (ref_inst_itr->opcode()) {
     // TODO(greg-lunarg): Add all other descriptor-based references
     case SpvOp::SpvOpImageSampleImplicitLod:
     case SpvOp::SpvOpImageSampleExplicitLod:
-      imageId =
+      sampledImageId =
           ref_inst_itr->GetSingleWordInOperand(kSpvImageSampleImageIdInIdx);
       break;
     default:
       return;
   }
-  Instruction* imageInst = get_def_use_mgr()->GetDef(imageId);
-  if (imageInst->opcode() == SpvOp::SpvOpSampledImage) {
+  Instruction* sampledImageInst = get_def_use_mgr()->GetDef(sampledImageId);
+  uint32_t imageId = 0;
+  Instruction* imageInst;
+  if (sampledImageInst->opcode() == SpvOp::SpvOpSampledImage) {
     imageId = imageInst->GetSingleWordInOperand(kSpvSampledImageImageIdInIdx);
     imageInst = get_def_use_mgr()->GetDef(imageId);
+  }
+  else {
+    imageId = sampledImageId;
+    imageInst = sampledImageInst;
+    sampledImageId = 0;
   }
   if (imageInst->opcode() != SpvOp::SpvOpLoad) {
     assert(false && "unexpected image value");
@@ -94,12 +101,12 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
       lengthInst->opcode() == SpvOpConstant) {
     if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
         lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx)) {
-      GenPreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
+      MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
       GenDebugOutputCode();
     }
   }
   else {
-    GenPreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
+    MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
     analysis::Bool boolTy;
     uint32_t boolTyId = context()->get_type_mgr()->GetTypeInstruction(&boolTy);
     uint32_t ultId = AddBinaryOp(boolTyId, SpvOpULessThan, indexId, lengthId,
@@ -109,9 +116,13 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     uint32_t invalidBlkId = TakeNextId();
     AddSelectionMerge(mergeBlkId, SpvSelectionControlMaskNone, &new_blk_ptr);
     AddBranchCond(ultId, validBlkId, invalidBlkId, &new_blk_ptr);
-    new_blocks->push_back(std::move(new_blk_ptr));
     // Gen valid code block
+    new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(NewLabel(validBlkId)));
+    // Clone descriptor load
+    std::unique_ptr<Instruction> newLoadInst(imageInst->Clone(context()));
+    uint32_t newLoadId = TakeNextId();
+    newLoadInst->SetResultId(newLoadId);
   }
 }
 
@@ -155,6 +166,8 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
 }
 
 void InstBindlessCheckPass::InitializeInstBindlessCheck() {
+  // Initialize base class
+  InitializeInstrument();
   // Look for related extensions
   ext_descriptor_indexing_defined_ = false;
   for (auto& ei : get_module()->extensions()) {
@@ -171,14 +184,15 @@ Pass::Status InstBindlessCheckPass::ProcessImpl() {
   // Attempt exhaustive inlining on each entry point function in module
   ProcessFunction pfn = [this](Function* fp) { return InstBindlessCheck(fp); };
   bool modified = ProcessEntryPointCallTree(pfn, get_module());
-  // TODO(greg-lunarg): If modified, do CFGCleanup
+  // This pass does not update def/use info
+  context()->InvalidateAnalyses(IRContext::kAnalysisDefUse);
+  // TODO(greg-lunarg): If modified, do CFGCleanup, DCE
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
 
 InstBindlessCheckPass::InstBindlessCheckPass() = default;
 
 Pass::Status InstBindlessCheckPass::Process() {
-  InitializeInstrument();
   InitializeInstBindlessCheck();
   return ProcessImpl();
 }
