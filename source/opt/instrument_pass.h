@@ -72,6 +72,10 @@ class InstrumentPass : public Pass {
   void AddBranchCond(uint32_t cond_id, uint32_t true_id, uint32_t false_id,
                      std::unique_ptr<BasicBlock>* block_ptr);
 
+  void AddPhi(uint32_t type_id, uint32_t var0_id, uint32_t parent0_id,
+              uint32_t var1_id, uint32_t parent1_id,
+              std::unique_ptr<BasicBlock>* block_ptr);
+
   // Add unconditional branch to labelId to end of block block_ptr.
   void AddLoopMerge(uint32_t merge_id, uint32_t continue_id,
                     std::unique_ptr<BasicBlock>* block_ptr);

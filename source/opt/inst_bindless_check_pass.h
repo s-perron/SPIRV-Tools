@@ -59,7 +59,7 @@ class InstBindlessCheckPass : public InstrumentPass {
 
    // Generate instructions which will write a record to the end of the debug
    // output buffer.
-   void GenDebugOutputCode();
+   void GenDebugOutputCode(std::unique_ptr<BasicBlock>* new_blk_ptr);
 
    // Instrument all bindless references in func. Specifically,
    // generate code to check that the index into the descriptor array is

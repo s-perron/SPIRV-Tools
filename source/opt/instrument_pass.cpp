@@ -108,6 +108,19 @@ void InstrumentPass::AddBranchCond(uint32_t cond_id, uint32_t true_id,
   (*block_ptr)->AddInstruction(std::move(newBranch));
 }
 
+void InstrumentPass::AddPhi(uint32_t type_id, uint32_t var0_id,
+    uint32_t parent0_id, uint32_t var1_id, uint32_t parent1_id,
+    std::unique_ptr<BasicBlock>* block_ptr) {
+  uint32_t resultId = TakeNextId();
+  std::unique_ptr<Instruction> newPhi(
+    new Instruction(context(), SpvOpPhi, type_id, resultId,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ var0_id } },
+      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ parent0_id } },
+      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ var1_id } },
+      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ parent1_id } } }));
+  (*block_ptr)->AddInstruction(std::move(newPhi));
+}
+
 void InstrumentPass::AddLoopMerge(uint32_t merge_id, uint32_t continue_id,
                               std::unique_ptr<BasicBlock>* block_ptr) {
   std::unique_ptr<Instruction> newLoopMerge(new Instruction(

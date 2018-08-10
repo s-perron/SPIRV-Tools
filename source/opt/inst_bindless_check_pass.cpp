@@ -16,8 +16,13 @@
 
 #include "inst_bindless_check_pass.h"
 
+// Operand indices
+static const int kSpvImageSampleImageIdIdx = 2;
+
+// Input Operand Indices
 static const int kSpvImageSampleImageIdInIdx = 0;
 static const int kSpvSampledImageImageIdInIdx = 0;
+static const int kSpvSampledImageSamplerIdInIdx = 1;
 static const int kSpvLoadPtrIdInIdx = 0;
 static const int kSpvAccessChainBaseIdInIdx = 0;
 static const int kSpvAccessChainIndex0IdInIdx = 0;
@@ -28,7 +33,8 @@ static const int kSpvConstantValueInIdx = 0;
 namespace spvtools {
 namespace opt {
 
-void InstBindlessCheckPass::GenDebugOutputCode() {
+void InstBindlessCheckPass::GenDebugOutputCode(
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
 }
 
 void InstBindlessCheckPass::GenBindlessCheckCode(
@@ -49,27 +55,27 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
       return;
   }
   Instruction* sampledImageInst = get_def_use_mgr()->GetDef(sampledImageId);
-  uint32_t imageId = 0;
-  Instruction* imageInst;
+  uint32_t loadId;
+  Instruction* loadInst;
   if (sampledImageInst->opcode() == SpvOp::SpvOpSampledImage) {
-    imageId = imageInst->GetSingleWordInOperand(kSpvSampledImageImageIdInIdx);
-    imageInst = get_def_use_mgr()->GetDef(imageId);
+    loadId = sampledImageInst->GetSingleWordInOperand(kSpvSampledImageImageIdInIdx);
+    loadInst = get_def_use_mgr()->GetDef(loadId);
   }
   else {
-    imageId = sampledImageId;
-    imageInst = sampledImageInst;
+    loadId = sampledImageId;
+    loadInst = sampledImageInst;
     sampledImageId = 0;
   }
-  if (imageInst->opcode() != SpvOp::SpvOpLoad) {
+  if (loadInst->opcode() != SpvOp::SpvOpLoad) {
     assert(false && "unexpected image value");
     return;
   }
-  uint32_t ptrId = imageInst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
+  uint32_t ptrId = loadInst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
   Instruction* ptrInst = get_def_use_mgr()->GetDef(ptrId);
+  // Check index against upper bound
   // TODO(greg-lunarg): Check non-indexed descriptor refs
   if (ptrInst->opcode() != SpvOp::SpvOpAccessChain)
     return;
-  // Check index against upper bound
   if (ptrInst->NumInOperands() != 2) {
     assert(false && "unexpected bindless index number");
     return;
@@ -102,7 +108,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
         lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx)) {
       MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-      GenDebugOutputCode();
+      GenDebugOutputCode(&new_blk_ptr);
     }
   }
   else {
@@ -120,9 +126,51 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(NewLabel(validBlkId)));
     // Clone descriptor load
-    std::unique_ptr<Instruction> newLoadInst(imageInst->Clone(context()));
+    std::unique_ptr<Instruction> newLoadInst(loadInst->Clone(context()));
     uint32_t newLoadId = TakeNextId();
     newLoadInst->SetResultId(newLoadId);
+    new_blk_ptr->AddInstruction(std::move(newLoadInst));
+    uint32_t imageId = newLoadId;
+    // Clone SampledImage with new load, if needed
+    if (sampledImageId != 0) {
+      imageId = AddBinaryOp(sampledImageInst->type_id(), SpvOpSampledImage,
+          newLoadId, sampledImageInst->GetSingleWordInOperand(
+          kSpvSampledImageSamplerIdInIdx), &new_blk_ptr);
+    }
+    // Clone original reference with new image
+    std::unique_ptr<Instruction> newRefInst(ref_inst_itr->Clone(context()));
+    uint32_t newRefId = TakeNextId();
+    newRefInst->SetResultId(newRefId);
+    switch (ref_inst_itr->opcode()) {
+      // TODO(greg-lunarg): Add all other descriptor-based references
+      case SpvOp::SpvOpImageSampleImplicitLod:
+      case SpvOp::SpvOpImageSampleExplicitLod:
+        newRefInst->SetOperand(kSpvImageSampleImageIdIdx, {imageId});
+        break;
+      default:
+        assert(false && "unexpected reference opcode");
+        break;
+    }
+    // Close valid block and gen invalid block
+    AddBranch(mergeBlkId, &new_blk_ptr);
+    new_blocks->push_back(std::move(new_blk_ptr));
+    new_blk_ptr.reset(new BasicBlock(NewLabel(invalidBlkId)));
+    GenDebugOutputCode(&new_blk_ptr);
+    // Gen zero for invalid  reference
+    analysis::TypeManager* type_mgr = context()->get_type_mgr();
+    analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
+    uint32_t ref_type_id = ref_inst_itr->type_id();
+    const analysis::Type* type = type_mgr->GetType(ref_type_id);
+    const analysis::Constant* null_const = const_mgr->GetConstant(type, {});
+    Instruction* null_inst =
+        const_mgr->GetDefiningInstruction(null_const, ref_type_id);
+    uint32_t nullId = null_inst->result_id();
+    // Close invalid block and gen merge block
+    AddBranch(mergeBlkId, &new_blk_ptr);
+    new_blocks->push_back(std::move(new_blk_ptr));
+    new_blk_ptr.reset(new BasicBlock(NewLabel(mergeBlkId)));
+    // Gen phi of reference and zero
+    AddPhi(ref_type_id, newRefId, validBlkId, nullId, invalidBlkId, &new_blk_ptr);
   }
 }
 
