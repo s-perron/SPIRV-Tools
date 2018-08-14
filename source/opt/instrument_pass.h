@@ -51,8 +51,7 @@ class InstrumentPass : public Pass {
 
   // Move all code in |ref_block_itr| succeeding the instruction |ref_inst_itr|
   // to be instrumented into block |new_blk_ptr|.
-  void MovePostludeCode(BasicBlock::iterator ref_inst_itr,
-    UptrVectorIterator<BasicBlock> ref_block_itr,
+  void MovePostludeCode(UptrVectorIterator<BasicBlock> ref_block_itr,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Add binary instruction |type_id, opcode, operand1, operand2| to
