@@ -49,10 +49,22 @@ class InstrumentPass : public Pass {
     UptrVectorIterator<BasicBlock> ref_block_itr,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
+  // Move all code in |ref_block_itr| succeeding the instruction |ref_inst_itr|
+  // to be instrumented into block |new_blk_ptr|.
+  void MovePostludeCode(BasicBlock::iterator ref_inst_itr,
+    UptrVectorIterator<BasicBlock> ref_block_itr,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
   // Add binary instruction |type_id, opcode, operand1, operand2| to
   // |block_ptr| and return resultId.
-  uint32_t InstrumentPass::AddBinaryOp(
-    uint32_t type_id, SpvOp opcode,
+  void InstrumentPass::AddUnaryOp(
+    uint32_t type_id, uint32_t result_id, SpvOp opcode,
+    uint32_t operand, std::unique_ptr<BasicBlock>* block_ptr);
+
+  // Add binary instruction |type_id, opcode, operand1, operand2| to
+  // |block_ptr| and return resultId.
+  void InstrumentPass::AddBinaryOp(
+    uint32_t type_id, uint32_t result_id, SpvOp opcode,
     uint32_t operand1, uint32_t operand2,
     std::unique_ptr<BasicBlock>* block_ptr);
 
@@ -72,8 +84,8 @@ class InstrumentPass : public Pass {
   void AddBranchCond(uint32_t cond_id, uint32_t true_id, uint32_t false_id,
                      std::unique_ptr<BasicBlock>* block_ptr);
 
-  void AddPhi(uint32_t type_id, uint32_t var0_id, uint32_t parent0_id,
-              uint32_t var1_id, uint32_t parent1_id,
+  void AddPhi(uint32_t type_id, uint32_t result_id, uint32_t var0_id,
+              uint32_t parent0_id, uint32_t var1_id, uint32_t parent1_id,
               std::unique_ptr<BasicBlock>* block_ptr);
 
   // Add unconditional branch to labelId to end of block block_ptr.
@@ -94,6 +106,9 @@ class InstrumentPass : public Pass {
   // Returns the id for the boolean false value. Looks in the module first
   // and creates it if not found. Remembers it for future calls.
   uint32_t GetFalseId();
+
+  // Returns the id for the null constant value of |type_id|.
+  uint32_t GetNullId(uint32_t type_id);
 
   // Map callee params to caller args
   void MapParams(Function* calleeFn, BasicBlock::iterator call_inst_itr,

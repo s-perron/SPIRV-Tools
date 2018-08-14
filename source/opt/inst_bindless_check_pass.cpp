@@ -97,26 +97,35 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   // TODO(greg-lunarg): Support runtime array
   if (ptrTypeInst->opcode() != SpvOpTypeArray)
     return;
-  uint32_t lengthId =
-      ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
-  Instruction* lengthInst = get_def_use_mgr()->GetDef(lengthId);
   // If index and bound both compile-time constants and index >= bound,
   // just generate debug output code. Otherwise generate bounds test
   // code. True branch is full reference; false branch is debug output.
+  uint32_t lengthId =
+    ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
+  Instruction* lengthInst = get_def_use_mgr()->GetDef(lengthId);
   if (indexInst->opcode() == SpvOpConstant &&
       lengthInst->opcode() == SpvOpConstant) {
     if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
         lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx)) {
       MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
       GenDebugOutputCode(&new_blk_ptr);
+      // Set reference value to null.
+      uint32_t ref_type_id = ref_inst_itr->type_id();
+      uint32_t nullId = GetNullId(ref_type_id);
+      AddUnaryOp(ref_type_id, ref_inst_itr->result_id(), SpvOpCopyObject,
+          nullId, &new_blk_ptr);
+      // Clear same-block set since only one block is being generated
+      // thus no cloning is required.
+      preCallSB_.clear();
+      MovePostludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
     }
   }
   else {
     MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
     analysis::Bool boolTy;
     uint32_t boolTyId = context()->get_type_mgr()->GetTypeInstruction(&boolTy);
-    uint32_t ultId = AddBinaryOp(boolTyId, SpvOpULessThan, indexId, lengthId,
-        &new_blk_ptr);
+    uint32_t ultId = TakeNextId();
+    AddBinaryOp(boolTyId, ultId, SpvOpULessThan, indexId, lengthId, &new_blk_ptr);
     uint32_t mergeBlkId = TakeNextId();
     uint32_t validBlkId = TakeNextId();
     uint32_t invalidBlkId = TakeNextId();
@@ -130,12 +139,16 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     uint32_t newLoadId = TakeNextId();
     newLoadInst->SetResultId(newLoadId);
     new_blk_ptr->AddInstruction(std::move(newLoadInst));
+    get_decoration_mgr()->CloneDecorations(loadInst->result_id(), newLoadId);
     uint32_t imageId = newLoadId;
     // Clone SampledImage with new load, if needed
     if (sampledImageId != 0) {
-      imageId = AddBinaryOp(sampledImageInst->type_id(), SpvOpSampledImage,
+      imageId = TakeNextId();
+      AddBinaryOp(sampledImageInst->type_id(), imageId, SpvOpSampledImage,
           newLoadId, sampledImageInst->GetSingleWordInOperand(
           kSpvSampledImageSamplerIdInIdx), &new_blk_ptr);
+      get_decoration_mgr()->CloneDecorations(sampledImageInst->result_id(),
+          imageId);
     }
     // Clone original reference with new image
     std::unique_ptr<Instruction> newRefInst(ref_inst_itr->Clone(context()));
@@ -151,26 +164,26 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
         assert(false && "unexpected reference opcode");
         break;
     }
+    get_decoration_mgr()->CloneDecorations(ref_inst_itr->result_id(),
+        newRefId);
     // Close valid block and gen invalid block
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(NewLabel(invalidBlkId)));
     GenDebugOutputCode(&new_blk_ptr);
     // Gen zero for invalid  reference
-    analysis::TypeManager* type_mgr = context()->get_type_mgr();
-    analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
     uint32_t ref_type_id = ref_inst_itr->type_id();
-    const analysis::Type* type = type_mgr->GetType(ref_type_id);
-    const analysis::Constant* null_const = const_mgr->GetConstant(type, {});
-    Instruction* null_inst =
-        const_mgr->GetDefiningInstruction(null_const, ref_type_id);
-    uint32_t nullId = null_inst->result_id();
+    uint32_t nullId = GetNullId(ref_type_id);
     // Close invalid block and gen merge block
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(NewLabel(mergeBlkId)));
-    // Gen phi of reference and zero
-    AddPhi(ref_type_id, newRefId, validBlkId, nullId, invalidBlkId, &new_blk_ptr);
+    // Gen phi of new reference and zero. Use result id of original reference
+    // so we don't have to do a replace.
+    AddPhi(ref_type_id, ref_inst_itr->result_id(), newRefId, validBlkId,
+        nullId, invalidBlkId, &new_blk_ptr);
+    // Move remainder of original block instructions
+    MovePostludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
   }
 }
 
@@ -184,30 +197,33 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
     postCallSB_.clear();
     for (auto ii = bi->begin(); ii != bi->end();) {
       GenBindlessCheckCode(&newBlocks, &newVars, ii, bi);
-      if (newBlocks.size() > 0) {
-        // Update succeeding phis with label of new last block.
-        size_t newBlocksSize = newBlocks.size();
-        assert(newBlocksSize > 1);
-        UpdateSucceedingPhis(newBlocks);
-        // Replace original block with new block(s).
-        bi = bi.Erase();
-        for (auto& bb : newBlocks) {
-          bb->SetParent(func);
-        }
-        bi = bi.InsertBefore(&newBlocks);
-        // Reset block iterator to last new block
-        for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
-        // Insert new function variables.
-        if (newVars.size() > 0)
-          func->begin()->begin().InsertBefore(std::move(newVars));
-        modified = true;
-        // Restart instrumenting at beginning of last new block.
-        ii = bi->begin();
-        assert(newBlocks.size() == 0);
-        assert(newVars.size() == 0);
-      } else {
+      if (newBlocks.size() == 0) {
         ++ii;
+        continue;
       }
+      // If there are new blocks we know there will always be two or
+      // more, so update succeeding phis with label of new last block.
+      size_t newBlocksSize = newBlocks.size();
+      assert(newBlocksSize > 1);
+      UpdateSucceedingPhis(newBlocks);
+      // Remove original reference
+      context()->KillInst(&*ii);
+      // Replace original block with new block(s).
+      bi = bi.Erase();
+      for (auto& bb : newBlocks) {
+        bb->SetParent(func);
+      }
+      bi = bi.InsertBefore(&newBlocks);
+      // Reset block iterator to last new block
+      for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
+      // Insert new function variables.
+      if (newVars.size() > 0)
+        func->begin()->begin().InsertBefore(std::move(newVars));
+      modified = true;
+      // Restart instrumenting at beginning of last new block.
+      ii = bi->begin();
+      assert(newBlocks.size() == 0);
+      assert(newVars.size() == 0);
     }
   }
   return modified;

@@ -29,36 +29,68 @@ static const int kSpvLoopMergeContinueTargetIdInIdx = 1;
 namespace spvtools {
 namespace opt {
 
-  void InstrumentPass::MovePreludeCode(
-    BasicBlock::iterator ref_inst_itr,
-    UptrVectorIterator<BasicBlock> ref_block_itr,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
-    new_blk_ptr->reset(new BasicBlock(NewLabel(ref_block_itr->id())));
-    // Copy contents of original ref block up to ref instruction.
-    for (auto cii = ref_block_itr->begin(); cii != ref_inst_itr;
+void InstrumentPass::MovePreludeCode(
+  BasicBlock::iterator ref_inst_itr,
+  UptrVectorIterator<BasicBlock> ref_block_itr,
+  std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  new_blk_ptr->reset(new BasicBlock(NewLabel(ref_block_itr->id())));
+  // Move contents of original ref block up to ref instruction.
+  for (auto cii = ref_block_itr->begin(); cii != ref_inst_itr;
       cii = ref_block_itr->begin()) {
-      Instruction* inst = &*cii;
-      inst->RemoveFromList();
-      std::unique_ptr<Instruction> mv_ptr(inst);
-      // Remember same-block ops for possible regeneration.
-      if (IsSameBlockOp(&*mv_ptr)) {
-        auto* sb_inst_ptr = mv_ptr.get();
-        preCallSB_[mv_ptr->result_id()] = sb_inst_ptr;
-      }
-      (*new_blk_ptr)->AddInstruction(std::move(mv_ptr));
+    Instruction* inst = &*cii;
+    inst->RemoveFromList();
+    std::unique_ptr<Instruction> mv_ptr(inst);
+    // Remember same-block ops for possible regeneration.
+    if (IsSameBlockOp(&*mv_ptr)) {
+      auto* sb_inst_ptr = mv_ptr.get();
+      preCallSB_[mv_ptr->result_id()] = sb_inst_ptr;
     }
+    (*new_blk_ptr)->AddInstruction(std::move(mv_ptr));
   }
+}
 
-uint32_t InstrumentPass::AddBinaryOp(uint32_t type_id, SpvOp opcode,
-                                     uint32_t operand1, uint32_t operand2,
+void InstrumentPass::MovePostludeCode(
+  BasicBlock::iterator ref_inst_itr,
+  UptrVectorIterator<BasicBlock> ref_block_itr,
+  std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  new_blk_ptr->reset(new BasicBlock(NewLabel(ref_block_itr->id())));
+  // Move contents of original ref block after ref instruction.
+  for (Instruction* inst = ref_inst_itr->NextNode(); inst;
+    inst = ref_inst_itr->NextNode()) {
+    inst->RemoveFromList();
+    std::unique_ptr<Instruction> cp_inst(inst);
+    // Regenerate any same-block instruction that has not been seen in the
+    // current block.
+    if (preCallSB_.size() > 0) {
+      CloneSameBlockOps(&cp_inst, &postCallSB_, &preCallSB_, new_blk_ptr);
+      // Remember same-block ops in this block.
+      if (IsSameBlockOp(&*cp_inst)) {
+        const uint32_t rid = cp_inst->result_id();
+        postCallSB_[rid] = rid;
+      }
+    }
+    (*new_blk_ptr)->AddInstruction(std::move(cp_inst));
+  }
+}
+
+void InstrumentPass::AddUnaryOp(uint32_t type_id, uint32_t result_id,
+                                     SpvOp opcode, uint32_t operand,
                                      std::unique_ptr<BasicBlock>* block_ptr) {
-  uint32_t resultId = TakeNextId();
+  std::unique_ptr<Instruction> newUnOp(
+      new Instruction(context(), opcode, type_id, result_id,
+      { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand } } }));
+  (*block_ptr)->AddInstruction(std::move(newUnOp));
+}
+
+void InstrumentPass::AddBinaryOp(uint32_t type_id, uint32_t result_id,
+  SpvOp opcode, uint32_t operand1,
+  uint32_t operand2,
+  std::unique_ptr<BasicBlock>* block_ptr) {
   std::unique_ptr<Instruction> newBinOp(
-      new Instruction(context(), opcode, type_id, resultId,
-      { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
-        { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
+    new Instruction(context(), opcode, type_id, result_id,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+    { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
   (*block_ptr)->AddInstruction(std::move(newBinOp));
-  return resultId;
 }
 
 void InstrumentPass::AddSelectionMerge(
@@ -108,12 +140,11 @@ void InstrumentPass::AddBranchCond(uint32_t cond_id, uint32_t true_id,
   (*block_ptr)->AddInstruction(std::move(newBranch));
 }
 
-void InstrumentPass::AddPhi(uint32_t type_id, uint32_t var0_id,
+void InstrumentPass::AddPhi(uint32_t type_id, uint32_t result_id, uint32_t var0_id,
     uint32_t parent0_id, uint32_t var1_id, uint32_t parent1_id,
     std::unique_ptr<BasicBlock>* block_ptr) {
-  uint32_t resultId = TakeNextId();
   std::unique_ptr<Instruction> newPhi(
-    new Instruction(context(), SpvOpPhi, type_id, resultId,
+    new Instruction(context(), SpvOpPhi, type_id, result_id,
     { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ var0_id } },
       { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ parent0_id } },
       { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ var1_id } },
@@ -166,6 +197,16 @@ uint32_t InstrumentPass::GetFalseId() {
   false_id_ = TakeNextId();
   get_module()->AddGlobalValue(SpvOpConstantFalse, false_id_, boolId);
   return false_id_;
+}
+
+uint32_t InstrumentPass::GetNullId(uint32_t type_id) {
+  analysis::TypeManager* type_mgr = context()->get_type_mgr();
+  analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
+  const analysis::Type* type = type_mgr->GetType(type_id);
+  const analysis::Constant* null_const = const_mgr->GetConstant(type, {});
+  Instruction* null_inst =
+    const_mgr->GetDefiningInstruction(null_const, type_id);
+  return null_inst->result_id();
 }
 
 void InstrumentPass::MapParams(
