@@ -27,6 +27,9 @@
 #include "module.h"
 #include "pass.h"
 
+// Validation Ids
+static const int kValidationIdBindless;
+
 namespace spvtools {
 namespace opt {
 
@@ -52,6 +55,26 @@ class InstrumentPass : public Pass {
   // Move all code in |ref_block_itr| succeeding the instruction |ref_inst_itr|
   // to be instrumented into block |new_blk_ptr|.
   void MovePostludeCode(UptrVectorIterator<BasicBlock> ref_block_itr,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Generate instructions which will write the fragment-shader-specific and
+  // validation-specific members of the debug output buffer.
+  void GenFragDebugOutputCode(
+    std::vector<uint32_t> &validation_data,
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Return size of common and stage-specific output record members
+  uint32_t GetStageOutputRecordSize();
+
+  // Generate instructions which will write a record to the end of the debug
+  // output buffer for the current shader.
+  void GenDebugOutputCode(
+    uint32_t validation_id,
+    uint32_t func_idx,
+    uint32_t instruction_idx,
+    std::vector<uint32_t> &validation_data,
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Add binary instruction |type_id, opcode, operand1, operand2| to
@@ -189,6 +212,12 @@ class InstrumentPass : public Pass {
   void UpdateSucceedingPhis(
       std::vector<std::unique_ptr<BasicBlock>>& new_blocks);
 
+  // Return id for output buffer uint type
+  uint32_t GetOutputBufferUintPtrId();
+
+  // Return id for output buffer
+  uint32_t GetOutputBufferId();
+
   // Initialize state for optimization of |module|
   void InitializeInstrument();
 
@@ -210,6 +239,12 @@ class InstrumentPass : public Pass {
 
   // result id for OpConstantFalse
   uint32_t false_id_;
+
+  // id for output buffer
+  uint32_t output_buffer_id_;
+
+  // type id for output buffer element
+  uint32_t output_buffer_uint_ptr_id_;
 
   // Map from block to its structured successor blocks. See
   // ComputeStructuredSuccessors() for definition. TODO(dnovillo): This is

@@ -55,11 +55,9 @@ class InstBindlessCheckPass : public InstrumentPass {
    void GenBindlessCheckCode(std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
      std::vector<std::unique_ptr<Instruction>>* new_vars,
      BasicBlock::iterator ref_inst_itr,
-     UptrVectorIterator<BasicBlock> ref_block_itr);
-
-   // Generate instructions which will write a record to the end of the debug
-   // output buffer.
-   void GenDebugOutputCode(std::unique_ptr<BasicBlock>* new_blk_ptr);
+     UptrVectorIterator<BasicBlock> ref_block_itr,
+     uint32_t function_idx,
+     uint32_t instruction_idx);
 
    // Instrument all bindless references in func. Specifically,
    // generate code to check that the index into the descriptor array is

@@ -18,13 +18,30 @@
 
 #include "cfa.h"
 
-// Indices of operands in SPIR-V instructions
+// Validation Ids
+static const int kValidationIdBindless = 0;
 
+// Indices of operands in SPIR-V instructions
 static const int kSpvFunctionCallFunctionId = 2;
 static const int kSpvFunctionCallArgumentId = 3;
 static const int kSpvReturnValueId = 0;
 static const int kSpvLoopMergeMergeBlockId = 0;
 static const int kSpvLoopMergeContinueTargetIdInIdx = 1;
+
+// Common Output Record Offsets
+static const int kInstCommonOutLength = 0;
+static const int kInstCommonOutValidationId = 1;
+static const int kInstCommonOutShaderId = 2;
+static const int kInstCommonOutFunctionIdx = 3;
+static const int kInstCommonOutInstructionIdx = 4;
+static const int kInstCommonOutStageIdx = 5;
+
+// Frag Shader Output Record Offsets
+static const int kInstFragOutFragCoordX = 6;
+static const int kInstFragOutFragCoordY = 7;
+static const int kInstFragOutFragCoordZ = 8;
+static const int kInstFragOutFragCoordW = 9;
+static const int kInstFragOutRecordSize = 10;
 
 namespace spvtools {
 namespace opt {
@@ -76,6 +93,30 @@ void InstrumentPass::MovePostludeCode(
     }
     (*new_blk_ptr)->AddInstruction(std::move(mv_inst));
   }
+}
+
+void InstrumentPass::GenFragDebugOutputCode(
+    std::vector<uint32_t> &validation_data,
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+}
+
+uint32_t InstrumentPass::GetStageOutputRecordSize() {
+  // TODO(greg-lunarg): Add support for all stages
+  // TODO(greg-lunarg): Assert fragment shader
+  return kInstFragOutRecordSize;
+}
+
+void InstrumentPass::GenDebugOutputCode(
+    uint32_t validation_id,
+    uint32_t func_idx,
+    uint32_t instruction_idx,
+    std::vector<uint32_t> &validation_data,
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  // Gen code to only generate error record if debug output buffer size will
+  // not be exceeded.
+  uint32_t record_size = GetStageOutputRecordSize() + validation_data.size();
 }
 
 void InstrumentPass::AddUnaryOp(uint32_t type_id, uint32_t result_id,
@@ -770,8 +811,34 @@ bool InstrumentPass::IsInlinableFunction(Function* func) {
          no_return_in_loop_.cend();
 }
 
+// Return id for output buffer uint ptr type
+uint32_t InstrumentPass::GetOutputBufferUintPtrId() {
+  if (output_buffer_uint_ptr_id_ == 0) {
+    analysis::Integer uintTy(32, false);
+    uint32_t uintTyId = context()->get_type_mgr()->GetTypeInstruction(&uintTy);
+    output_buffer_uint_ptr_id_ = context()->get_type_mgr()->FindPointerToType(
+        uintTyId, SpvStorageClassStorageBuffer);
+  }
+  return output_buffer_uint_ptr_id_;
+}
+
+// Return id for output buffer
+uint32_t InstrumentPass::GetOutputBufferId() {
+  if (output_buffer_id_ == 0) {
+    analysis::Struct obufTy({
+        &analysis::Integer(32, false), 
+        &analysis::RuntimeArray(&analysis::Integer(32, false))});
+    uint32_t obufTyId = context()->get_type_mgr()->GetTypeInstruction(&obufTy);
+    uint32_t obufTyPtrId_ = context()->get_type_mgr()->FindPointerToType(
+        obufTyId, SpvStorageClassStorageBuffer);
+  }
+  return output_buffer_id_;
+}
+
 void InstrumentPass::InitializeInstrument() {
   false_id_ = 0;
+  output_buffer_id_ = 0;
+  output_buffer_uint_ptr_id_ = 0;
 
   // clear collections
   id2function_.clear();

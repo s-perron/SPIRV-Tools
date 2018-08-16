@@ -30,18 +30,21 @@ static const int kSpvTypePointerTypeIdInIdx = 0;
 static const int kSpvTypeArrayLengthIdInIdx = 1;
 static const int kSpvConstantValueInIdx = 0;
 
+// Bindless-specific Output Record Offsets
+static const int kInstBindlessOutDescIndex = 0;
+static const int kInstBindlessOutDescBound = 1;
+static const int kInstBindlessOutRecordSize = 2;
+
 namespace spvtools {
 namespace opt {
-
-void InstBindlessCheckPass::GenDebugOutputCode(
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
-}
 
 void InstBindlessCheckPass::GenBindlessCheckCode(
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     std::vector<std::unique_ptr<Instruction>>* new_vars,
     BasicBlock::iterator ref_inst_itr,
-    UptrVectorIterator<BasicBlock> ref_block_itr) {
+    UptrVectorIterator<BasicBlock> ref_block_itr,
+    uint32_t function_idx,
+    uint32_t instruction_idx) {
   // Look for reference through bindless descriptor. If not, return.
   std::unique_ptr<BasicBlock> new_blk_ptr;
   uint32_t sampledImageId;
@@ -109,7 +112,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
         lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx)) {
       MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-      GenDebugOutputCode(&new_blk_ptr);
+      GenDebugOutputCode(kValidationIdBindless, function_idx, instruction_idx,
+          { 0, 0 }, new_blocks, &new_blk_ptr);
       // Set the original reference id to zero. Kill original reference
       // before reusing id.
       uint32_t ref_type_id = ref_inst_itr->type_id();
@@ -186,7 +190,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
-    GenDebugOutputCode(&new_blk_ptr);
+    GenDebugOutputCode(kValidationIdBindless, function_idx, instruction_idx,
+        { 0, 0 }, new_blocks, &new_blk_ptr);
     // Gen zero for invalid  reference
     uint32_t ref_type_id = ref_inst_itr->type_id();
     uint32_t nullId = GetNullId(ref_type_id);
@@ -203,18 +208,30 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     // Move remainder of original block instructions into merge block
     MovePostludeCode(ref_block_itr, &new_blk_ptr);
   }
-  // Push remainder/merge block
+  // Add remainder/merge block to new blocks
   new_blocks->push_back(std::move(new_blk_ptr));
 }
 
 bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
   bool modified = false;
+  // Compute function index
+  uint32_t function_idx = 0;
+  for (auto fii = get_module()->begin(); fii != get_module()->end(); ++fii) {
+    if (&*fii == func)
+      break;
+    ++function_idx;
+  }
   std::vector<std::unique_ptr<BasicBlock>> newBlocks;
   std::vector<std::unique_ptr<Instruction>> newVars;
+  uint32_t instruction_idx = 0;
   // Using block iterators here because of block erasures and insertions.
   for (auto bi = func->begin(); bi != func->end(); ++bi) {
-    for (auto ii = bi->begin(); ii != bi->end();) {
-      GenBindlessCheckCode(&newBlocks, &newVars, ii, bi);
+    // Count block's label
+    ++instruction_idx;
+    for (auto ii = bi->begin(); ii != bi->end(); ++instruction_idx) {
+      // TODO(greg-lunarg): Bump instruction_idx if debug instruction
+      GenBindlessCheckCode(&newBlocks, &newVars, ii, bi, function_idx,
+          instruction_idx);
       if (newBlocks.size() == 0) {
         ++ii;
         continue;
