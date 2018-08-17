@@ -21,12 +21,9 @@
 // Validation Ids
 static const int kValidationIdBindless = 0;
 
-// Indices of operands in SPIR-V instructions
-static const int kSpvFunctionCallFunctionId = 2;
-static const int kSpvFunctionCallArgumentId = 3;
-static const int kSpvReturnValueId = 0;
-static const int kSpvLoopMergeMergeBlockId = 0;
-static const int kSpvLoopMergeContinueTargetIdInIdx = 1;
+// Debug Buffer Bindings
+static const int kDebugOutputBinding = 0;
+static const int kDebugInputBinding = 1;
 
 // Common Output Record Offsets
 static const int kInstCommonOutLength = 0;
@@ -42,6 +39,13 @@ static const int kInstFragOutFragCoordY = 7;
 static const int kInstFragOutFragCoordZ = 8;
 static const int kInstFragOutFragCoordW = 9;
 static const int kInstFragOutRecordSize = 10;
+
+// Indices of operands in SPIR-V instructions
+static const int kSpvFunctionCallFunctionId = 2;
+static const int kSpvFunctionCallArgumentId = 3;
+static const int kSpvReturnValueId = 0;
+static const int kSpvLoopMergeMergeBlockId = 0;
+static const int kSpvLoopMergeContinueTargetIdInIdx = 1;
 
 namespace spvtools {
 namespace opt {
@@ -139,6 +143,18 @@ void InstrumentPass::AddBinaryOp(uint32_t type_id, uint32_t result_id,
     { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
   get_def_use_mgr()->AnalyzeInstDefUse(&*newBinOp);
   (*block_ptr)->AddInstruction(std::move(newBinOp));
+}
+
+void InstrumentPass::AddDecoration(uint32_t inst_id, uint32_t decoration,
+    uint32_t decoration_value) {
+  std::unique_ptr<Instruction> newDecoOp(
+    new Instruction(context(), SpvOpDecorate, 0, 0,
+      { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
+          { decoration } },
+        { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
+          { decoration_value } } }));
+  get_def_use_mgr()->AnalyzeInstDefUse(&*newDecoOp);
+  get_module()->AddAnnotationInst(std::move(newDecoOp));
 }
 
 void InstrumentPass::AddSelectionMerge(
@@ -831,6 +847,17 @@ uint32_t InstrumentPass::GetOutputBufferId() {
     uint32_t obufTyId = context()->get_type_mgr()->GetTypeInstruction(&obufTy);
     uint32_t obufTyPtrId_ = context()->get_type_mgr()->FindPointerToType(
         obufTyId, SpvStorageClassStorageBuffer);
+    output_buffer_id_ = TakeNextId();
+    std::unique_ptr<Instruction> newVarOp(
+        new Instruction(context(), SpvOpVariable, obufTyPtrId_,
+            output_buffer_id_,
+            { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
+                { SpvStorageClassStorageBuffer } } }));
+    get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
+    get_module()->AddGlobalValue(std::move(newVarOp));
+    // TODO(greg-lunarg): Get debug descriptor set from command argument
+    AddDecoration(output_buffer_id_, SpvDecorationDescriptorSet, 7);
+    AddDecoration(output_buffer_id_, SpvDecorationBinding, kDebugOutputBinding);
   }
   return output_buffer_id_;
 }

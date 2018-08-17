@@ -229,7 +229,9 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
     // Count block's label
     ++instruction_idx;
     for (auto ii = bi->begin(); ii != bi->end(); ++instruction_idx) {
-      // TODO(greg-lunarg): Bump instruction_idx if debug instruction
+      // Bump instruction count if debug instructions
+      instruction_idx += ii->dbg_line_insts().size;
+      // Generate bindless check if warranted
       GenBindlessCheckCode(&newBlocks, &newVars, ii, bi, function_idx,
           instruction_idx);
       if (newBlocks.size() == 0) {

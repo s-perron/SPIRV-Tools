@@ -79,22 +79,25 @@ class InstrumentPass : public Pass {
 
   // Add binary instruction |type_id, opcode, operand1, operand2| to
   // |block_ptr| and return resultId.
-  void InstrumentPass::AddUnaryOp(
+  void AddUnaryOp(
     uint32_t type_id, uint32_t result_id, SpvOp opcode,
     uint32_t operand, std::unique_ptr<BasicBlock>* block_ptr);
 
   // Add binary instruction |type_id, opcode, operand1, operand2| to
   // |block_ptr| and return resultId.
-  void InstrumentPass::AddBinaryOp(
+  void AddBinaryOp(
     uint32_t type_id, uint32_t result_id, SpvOp opcode,
     uint32_t operand1, uint32_t operand2,
     std::unique_ptr<BasicBlock>* block_ptr);
 
   // Add SelectionMerge instruction |mergeBlockId, selectionControl| to
   // |block_ptr|.
-  void InstrumentPass::AddSelectionMerge(
+  void AddSelectionMerge(
     uint32_t mergeBlockId, uint32_t selectionControl,
     std::unique_ptr<BasicBlock>* block_ptr);
+  
+  void AddDecoration(uint32_t inst_id, uint32_t decoration,
+    uint32_t decoration_value);
 
   // Add pointer to type to module and return resultId.
   uint32_t AddPointerToType(uint32_t type_id, SpvStorageClass storage_class);
