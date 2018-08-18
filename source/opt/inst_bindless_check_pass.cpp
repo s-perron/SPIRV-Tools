@@ -136,10 +136,9 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   // for the referenced value.
   else {
     MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-    analysis::Bool boolTy;
-    uint32_t boolTyId = context()->get_type_mgr()->GetTypeInstruction(&boolTy);
     uint32_t ultId = TakeNextId();
-    AddBinaryOp(boolTyId, ultId, SpvOpULessThan, indexId, lengthId, &new_blk_ptr);
+    AddBinaryOp(GetTypeId(&analysis::Bool()), ultId, SpvOpULessThan, indexId,
+        lengthId, &new_blk_ptr);
     uint32_t mergeBlkId = TakeNextId();
     uint32_t validBlkId = TakeNextId();
     uint32_t invalidBlkId = TakeNextId();

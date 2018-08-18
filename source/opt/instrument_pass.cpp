@@ -25,6 +25,10 @@ static const int kValidationIdBindless = 0;
 static const int kDebugOutputBinding = 0;
 static const int kDebugInputBinding = 1;
 
+// Debug Buffer Offsets
+static const int kDebugOutputSizeOffset = 0;
+static const int kDebugOutputDataOffset = 1;
+
 // Common Output Record Offsets
 static const int kInstCommonOutLength = 0;
 static const int kInstCommonOutValidationId = 1;
@@ -99,30 +103,6 @@ void InstrumentPass::MovePostludeCode(
   }
 }
 
-void InstrumentPass::GenFragDebugOutputCode(
-    std::vector<uint32_t> &validation_data,
-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
-}
-
-uint32_t InstrumentPass::GetStageOutputRecordSize() {
-  // TODO(greg-lunarg): Add support for all stages
-  // TODO(greg-lunarg): Assert fragment shader
-  return kInstFragOutRecordSize;
-}
-
-void InstrumentPass::GenDebugOutputCode(
-    uint32_t validation_id,
-    uint32_t func_idx,
-    uint32_t instruction_idx,
-    std::vector<uint32_t> &validation_data,
-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
-  // Gen code to only generate error record if debug output buffer size will
-  // not be exceeded.
-  uint32_t record_size = GetStageOutputRecordSize() + validation_data.size();
-}
-
 void InstrumentPass::AddUnaryOp(uint32_t type_id, uint32_t result_id,
                                      SpvOp opcode, uint32_t operand,
                                      std::unique_ptr<BasicBlock>* block_ptr) {
@@ -134,8 +114,7 @@ void InstrumentPass::AddUnaryOp(uint32_t type_id, uint32_t result_id,
 }
 
 void InstrumentPass::AddBinaryOp(uint32_t type_id, uint32_t result_id,
-  SpvOp opcode, uint32_t operand1,
-  uint32_t operand2,
+  SpvOp opcode, uint32_t operand1, uint32_t operand2,
   std::unique_ptr<BasicBlock>* block_ptr) {
   std::unique_ptr<Instruction> newBinOp(
     new Instruction(context(), opcode, type_id, result_id,
@@ -143,6 +122,32 @@ void InstrumentPass::AddBinaryOp(uint32_t type_id, uint32_t result_id,
     { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
   get_def_use_mgr()->AnalyzeInstDefUse(&*newBinOp);
   (*block_ptr)->AddInstruction(std::move(newBinOp));
+}
+
+void InstrumentPass::AddQuadOp(uint32_t type_id, uint32_t result_id,
+  SpvOp opcode, uint32_t operand1, uint32_t operand2, uint32_t operand3,
+  uint32_t operand4, std::unique_ptr<BasicBlock>* block_ptr) {
+  std::unique_ptr<Instruction> newQuadOp(
+    new Instruction(context(), opcode, type_id, result_id,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } },
+      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand3 } },
+      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand4 } } }));
+  get_def_use_mgr()->AnalyzeInstDefUse(&*newQuadOp);
+  (*block_ptr)->AddInstruction(std::move(newQuadOp));
+}
+
+void InstrumentPass::AddArrayLength(uint32_t result_id,
+    uint32_t struct_ptr_id, uint32_t member_idx,
+    std::unique_ptr<BasicBlock>* block_ptr) {
+  std::unique_ptr<Instruction> newALenOp(
+      new Instruction(context(), SpvOpArrayLength,
+          GetTypeId(&analysis::Integer(32, false)), result_id,
+          { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ struct_ptr_id } },
+            { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER, {
+              member_idx } } }));
+  get_def_use_mgr()->AnalyzeInstDefUse(&*newALenOp);
+  (*block_ptr)->AddInstruction(std::move(newALenOp));
 }
 
 void InstrumentPass::AddDecoration(uint32_t inst_id, uint32_t decoration,
@@ -168,24 +173,6 @@ void InstrumentPass::AddSelectionMerge(
   (*block_ptr)->AddInstruction(std::move(newSMOp));
 }
 
-uint32_t InstrumentPass::AddPointerToType(uint32_t type_id,
-                                      SpvStorageClass storage_class) {
-  uint32_t resultId = TakeNextId();
-  std::unique_ptr<Instruction> type_inst(
-      new Instruction(context(), SpvOpTypePointer, 0, resultId,
-                      {{spv_operand_type_t::SPV_OPERAND_TYPE_STORAGE_CLASS,
-                        {uint32_t(storage_class)}},
-                       {spv_operand_type_t::SPV_OPERAND_TYPE_ID, {type_id}}}));
-  context()->AddType(std::move(type_inst));
-  analysis::Type* pointeeTy;
-  std::unique_ptr<analysis::Pointer> pointerTy;
-  std::tie(pointeeTy, pointerTy) =
-      context()->get_type_mgr()->GetTypeAndPointerType(type_id,
-                                                       SpvStorageClassFunction);
-  context()->get_type_mgr()->RegisterType(resultId, *pointerTy);
-  return resultId;
-}
-
 void InstrumentPass::AddBranch(uint32_t label_id,
                            std::unique_ptr<BasicBlock>* block_ptr) {
   std::unique_ptr<Instruction> newBranch(
@@ -208,8 +195,8 @@ void InstrumentPass::AddBranchCond(uint32_t cond_id, uint32_t true_id,
 }
 
 void InstrumentPass::AddPhi(uint32_t type_id, uint32_t result_id, uint32_t var0_id,
-    uint32_t parent0_id, uint32_t var1_id, uint32_t parent1_id,
-    std::unique_ptr<BasicBlock>* block_ptr) {
+  uint32_t parent0_id, uint32_t var1_id, uint32_t parent1_id,
+  std::unique_ptr<BasicBlock>* block_ptr) {
   std::unique_ptr<Instruction> newPhi(
     new Instruction(context(), SpvOpPhi, type_id, result_id,
     { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ var0_id } },
@@ -220,38 +207,155 @@ void InstrumentPass::AddPhi(uint32_t type_id, uint32_t result_id, uint32_t var0_
   (*block_ptr)->AddInstruction(std::move(newPhi));
 }
 
-void InstrumentPass::AddLoopMerge(uint32_t merge_id, uint32_t continue_id,
-                              std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newLoopMerge(new Instruction(
-      context(), SpvOpLoopMerge, 0, 0,
-      {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {merge_id}},
-       {spv_operand_type_t::SPV_OPERAND_TYPE_ID, {continue_id}},
-       {spv_operand_type_t::SPV_OPERAND_TYPE_LOOP_CONTROL, {0}}}));
-  (*block_ptr)->AddInstruction(std::move(newLoopMerge));
-}
-
-void InstrumentPass::AddStore(uint32_t ptr_id, uint32_t val_id,
-                          std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newStore(
-      new Instruction(context(), SpvOpStore, 0, 0,
-                      {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {ptr_id}},
-                       {spv_operand_type_t::SPV_OPERAND_TYPE_ID, {val_id}}}));
-  (*block_ptr)->AddInstruction(std::move(newStore));
-}
-
-void InstrumentPass::AddLoad(uint32_t type_id, uint32_t resultId, uint32_t ptr_id,
-                         std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newLoad(
-      new Instruction(context(), SpvOpLoad, type_id, resultId,
-                      {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {ptr_id}}}));
-  (*block_ptr)->AddInstruction(std::move(newLoad));
-}
-
 std::unique_ptr<Instruction> InstrumentPass::NewLabel(uint32_t label_id) {
   std::unique_ptr<Instruction> newLabel(
       new Instruction(context(), SpvOpLabel, 0, label_id, {}));
   get_def_use_mgr()->AnalyzeInstDefUse(&*newLabel);
   return newLabel;
+}
+
+uint32_t InstrumentPass::GetNullId(uint32_t type_id) {
+  analysis::TypeManager* type_mgr = context()->get_type_mgr();
+  analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
+  const analysis::Type* type = type_mgr->GetType(type_id);
+  const analysis::Constant* null_const = const_mgr->GetConstant(type, {});
+  Instruction* null_inst =
+    const_mgr->GetDefiningInstruction(null_const, type_id);
+  return null_inst->result_id();
+}
+
+uint32_t InstrumentPass::GetUintConstantId(uint32_t u) {
+  analysis::TypeManager* type_mgr = context()->get_type_mgr();
+  analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
+  analysis::Integer uintTy(32, false);
+  uint32_t uintTyId = context()->get_type_mgr()->GetTypeInstruction(&uintTy);
+  const analysis::Constant* uint_const = const_mgr->GetConstant(&uintTy, {u});
+  Instruction* uint_inst =
+      const_mgr->GetDefiningInstruction(uint_const, uintTyId);
+  return uint_inst->result_id();
+
+}
+
+void InstrumentPass::GenCommonDebugOutputCode(
+  std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+  std::unique_ptr<BasicBlock>* new_blk_ptr) {
+}
+
+void InstrumentPass::GenFragDebugOutputCode(
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+}
+
+uint32_t InstrumentPass::GetStageOutputRecordSize() {
+  // TODO(greg-lunarg): Add support for all stages
+  // TODO(greg-lunarg): Assert fragment shader
+  return kInstFragOutRecordSize;
+}
+
+void InstrumentPass::GenDebugOutputCode(
+  uint32_t validation_id,
+  uint32_t func_idx,
+  uint32_t instruction_idx,
+  std::vector<uint32_t> &validation_data,
+  std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+  std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  // Gen test if debug output buffer size will not be exceeded.
+  uint32_t obuf_record_sz = GetStageOutputRecordSize() +
+      validation_data.size();
+  uint32_t obuf_ac_id = TakeNextId();
+  AddBinaryOp(GetOutputBufferUintPtrId(), obuf_ac_id, SpvOpAccessChain,
+      GetOutputBufferId(), GetUintConstantId(kDebugOutputSizeOffset),
+      new_blk_ptr);
+  // Fetch the current debug buffer written size atomically, adding the
+  // size of the record to be written.
+  uint32_t obuf_curr_sz_id = TakeNextId();
+  AddQuadOp(GetTypeId(&analysis::Integer(32, false)), obuf_curr_sz_id,
+      SpvOpAtomicIAdd,
+      obuf_ac_id,
+      GetUintConstantId(SpvScopeInvocation),
+      GetUintConstantId(SpvMemoryAccessMaskNone),
+      GetUintConstantId(obuf_record_sz),
+      new_blk_ptr);
+  // Compute new written size
+  uint32_t obuf_new_sz_id = TakeNextId();
+  AddBinaryOp(GetTypeId(&analysis::Integer(32, false)), obuf_new_sz_id,
+      SpvOpIAdd,
+      obuf_curr_sz_id, GetUintConstantId(obuf_record_sz),
+      new_blk_ptr);
+  // Fetch the data bound
+  uint32_t obuf_bnd_id = TakeNextId();
+  AddArrayLength(obuf_bnd_id,
+      GetOutputBufferId(),
+      GetUintConstantId(kDebugOutputDataOffset),
+      new_blk_ptr);
+  // Test that new written size is less than or equal to debug output
+  // data bound
+  uint32_t obuf_safe_id = TakeNextId();
+  AddBinaryOp(GetTypeId(&analysis::Bool()), obuf_new_sz_id,
+      SpvOpULessThanEqual, obuf_new_sz_id, obuf_bnd_id,
+      new_blk_ptr);
+  uint32_t mergeBlkId = TakeNextId();
+  uint32_t writeBlkId = TakeNextId();
+  std::unique_ptr<Instruction> mergeLabel(NewLabel(mergeBlkId));
+  std::unique_ptr<Instruction> validLabel(NewLabel(writeBlkId));
+  AddSelectionMerge(mergeBlkId, SpvSelectionControlMaskNone, new_blk_ptr);
+  AddBranchCond(obuf_safe_id, writeBlkId, mergeBlkId, new_blk_ptr);
+  // Close safety test block and gen write block
+  new_blocks->push_back(std::move(*new_blk_ptr));
+  new_blk_ptr->reset(new BasicBlock(std::move(validLabel)));
+  // TODO(greg-lunarg): Add support for all stages
+  // TODO(greg-lunarg): Assert fragment shader
+  GenCommonDebugOutputCode(new_blocks, new_blk_ptr);
+  GenFragDebugOutputCode(new_blocks, new_blk_ptr);
+  // Close write block and gen merge block
+  AddBranch(mergeBlkId, new_blk_ptr);
+  new_blocks->push_back(std::move(*new_blk_ptr));
+  new_blk_ptr->reset(new BasicBlock(std::move(mergeLabel)));
+}
+
+uint32_t InstrumentPass::AddPointerToType(uint32_t type_id,
+  SpvStorageClass storage_class) {
+  uint32_t resultId = TakeNextId();
+  std::unique_ptr<Instruction> type_inst(
+    new Instruction(context(), SpvOpTypePointer, 0, resultId,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_STORAGE_CLASS,
+    { uint32_t(storage_class) } },
+    { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ type_id } } }));
+  context()->AddType(std::move(type_inst));
+  analysis::Type* pointeeTy;
+  std::unique_ptr<analysis::Pointer> pointerTy;
+  std::tie(pointeeTy, pointerTy) =
+    context()->get_type_mgr()->GetTypeAndPointerType(type_id,
+      SpvStorageClassFunction);
+  context()->get_type_mgr()->RegisterType(resultId, *pointerTy);
+  return resultId;
+}
+
+void InstrumentPass::AddLoopMerge(uint32_t merge_id, uint32_t continue_id,
+  std::unique_ptr<BasicBlock>* block_ptr) {
+  std::unique_ptr<Instruction> newLoopMerge(new Instruction(
+    context(), SpvOpLoopMerge, 0, 0,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ merge_id } },
+    { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ continue_id } },
+    { spv_operand_type_t::SPV_OPERAND_TYPE_LOOP_CONTROL,{ 0 } } }));
+  (*block_ptr)->AddInstruction(std::move(newLoopMerge));
+}
+
+void InstrumentPass::AddStore(uint32_t ptr_id, uint32_t val_id,
+  std::unique_ptr<BasicBlock>* block_ptr) {
+  std::unique_ptr<Instruction> newStore(
+    new Instruction(context(), SpvOpStore, 0, 0,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ ptr_id } },
+    { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ val_id } } }));
+  (*block_ptr)->AddInstruction(std::move(newStore));
+}
+
+void InstrumentPass::AddLoad(uint32_t type_id, uint32_t resultId, uint32_t ptr_id,
+  std::unique_ptr<BasicBlock>* block_ptr) {
+  std::unique_ptr<Instruction> newLoad(
+    new Instruction(context(), SpvOpLoad, type_id, resultId,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ ptr_id } } }));
+  (*block_ptr)->AddInstruction(std::move(newLoad));
 }
 
 uint32_t InstrumentPass::GetFalseId() {
@@ -266,16 +370,6 @@ uint32_t InstrumentPass::GetFalseId() {
   false_id_ = TakeNextId();
   get_module()->AddGlobalValue(SpvOpConstantFalse, false_id_, boolId);
   return false_id_;
-}
-
-uint32_t InstrumentPass::GetNullId(uint32_t type_id) {
-  analysis::TypeManager* type_mgr = context()->get_type_mgr();
-  analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
-  const analysis::Type* type = type_mgr->GetType(type_id);
-  const analysis::Constant* null_const = const_mgr->GetConstant(type, {});
-  Instruction* null_inst =
-    const_mgr->GetDefiningInstruction(null_const, type_id);
-  return null_inst->result_id();
 }
 
 void InstrumentPass::MapParams(
@@ -827,13 +921,16 @@ bool InstrumentPass::IsInlinableFunction(Function* func) {
          no_return_in_loop_.cend();
 }
 
+// Return id for uint type
+uint32_t InstrumentPass::GetTypeId(analysis::Type* ty_ptr) {
+  return context()->get_type_mgr()->GetTypeInstruction(ty_ptr);
+}
+
 // Return id for output buffer uint ptr type
 uint32_t InstrumentPass::GetOutputBufferUintPtrId() {
   if (output_buffer_uint_ptr_id_ == 0) {
-    analysis::Integer uintTy(32, false);
-    uint32_t uintTyId = context()->get_type_mgr()->GetTypeInstruction(&uintTy);
     output_buffer_uint_ptr_id_ = context()->get_type_mgr()->FindPointerToType(
-        uintTyId, SpvStorageClassStorageBuffer);
+        GetTypeId(&analysis::Integer(32, false)), SpvStorageClassStorageBuffer);
   }
   return output_buffer_uint_ptr_id_;
 }

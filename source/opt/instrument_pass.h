@@ -57,10 +57,18 @@ class InstrumentPass : public Pass {
   void MovePostludeCode(UptrVectorIterator<BasicBlock> ref_block_itr,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
+  // Return id for unsigned int constant value |u|.
+  uint32_t GetUintConstantId(uint32_t u);
+
+  // Generate instructions which will write the fragment-shader-specific and
+  // validation-specific members of the debug output buffer.
+  void GenCommonDebugOutputCode(
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
   // Generate instructions which will write the fragment-shader-specific and
   // validation-specific members of the debug output buffer.
   void GenFragDebugOutputCode(
-    std::vector<uint32_t> &validation_data,
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
@@ -88,6 +96,14 @@ class InstrumentPass : public Pass {
   void AddBinaryOp(
     uint32_t type_id, uint32_t result_id, SpvOp opcode,
     uint32_t operand1, uint32_t operand2,
+    std::unique_ptr<BasicBlock>* block_ptr);
+  
+  void AddQuadOp(uint32_t type_id, uint32_t result_id,
+    SpvOp opcode, uint32_t operand1, uint32_t operand2, uint32_t operand3,
+    uint32_t operand4, std::unique_ptr<BasicBlock>* block_ptr);
+
+  void AddArrayLength(uint32_t result_id,
+    uint32_t struct_ptr_id, uint32_t member_idx,
     std::unique_ptr<BasicBlock>* block_ptr);
 
   // Add SelectionMerge instruction |mergeBlockId, selectionControl| to
@@ -214,6 +230,9 @@ class InstrumentPass : public Pass {
   // Update phis in succeeding blocks to point to new last block
   void UpdateSucceedingPhis(
       std::vector<std::unique_ptr<BasicBlock>>& new_blocks);
+
+  // Return id for |ty_ptr|
+  uint32_t GetTypeId(analysis::Type* ty_ptr);
 
   // Return id for output buffer uint type
   uint32_t GetOutputBufferUintPtrId();
