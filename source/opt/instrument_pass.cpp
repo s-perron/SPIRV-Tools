@@ -30,7 +30,7 @@ static const int kDebugOutputSizeOffset = 0;
 static const int kDebugOutputDataOffset = 1;
 
 // Common Output Record Offsets
-static const int kInstCommonOutLength = 0;
+static const int kInstCommonOutSize = 0;
 static const int kInstCommonOutValidationId = 1;
 static const int kInstCommonOutShaderId = 2;
 static const int kInstCommonOutFunctionIdx = 3;
@@ -122,6 +122,18 @@ void InstrumentPass::AddBinaryOp(uint32_t type_id, uint32_t result_id,
     { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
   get_def_use_mgr()->AnalyzeInstDefUse(&*newBinOp);
   (*block_ptr)->AddInstruction(std::move(newBinOp));
+}
+
+void InstrumentPass::AddTernaryOp(uint32_t type_id, uint32_t result_id,
+  SpvOp opcode, uint32_t operand1, uint32_t operand2, uint32_t operand3,
+  std::unique_ptr<BasicBlock>* block_ptr) {
+  std::unique_ptr<Instruction> newTernOp(
+    new Instruction(context(), opcode, type_id, result_id,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } },
+      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand3 } } }));
+  get_def_use_mgr()->AnalyzeInstDefUse(&*newTernOp);
+  (*block_ptr)->AddInstruction(std::move(newTernOp));
 }
 
 void InstrumentPass::AddQuadOp(uint32_t type_id, uint32_t result_id,
@@ -236,13 +248,32 @@ uint32_t InstrumentPass::GetUintConstantId(uint32_t u) {
 
 }
 
+void InstrumentPass::GenDebugOutputFieldCode(
+    uint32_t base_offset_id,
+    uint32_t field_offset,
+    uint32_t field_value_id,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  uint32_t data_idx_id = TakeNextId();
+  AddBinaryOp(GetTypeId(&analysis::Integer(32, false)), data_idx_id, SpvOpIAdd,
+      base_offset_id, GetUintConstantId(field_offset), new_blk_ptr);
+  uint32_t achain_id = TakeNextId();
+  AddTernaryOp(GetOutputBufferUintPtrId(), achain_id, SpvOpAccessChain,
+    GetOutputBufferId(), GetUintConstantId(kDebugOutputDataOffset),
+    data_idx_id, new_blk_ptr);
+  AddBinaryOp(0, 0, SpvOpStore, achain_id, field_value_id, new_blk_ptr);
+}
+
 void InstrumentPass::GenCommonDebugOutputCode(
-  std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-  std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    uint32_t record_sz,
+    uint32_t base_offset_id,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  // Store record size
+  GenDebugOutputFieldCode(base_offset_id, kInstCommonOutSize,
+      GetUintConstantId(record_sz), new_blk_ptr);
 }
 
 void InstrumentPass::GenFragDebugOutputCode(
-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    uint32_t base_off,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
 }
 
@@ -262,8 +293,8 @@ void InstrumentPass::GenDebugOutputCode(
   // Gen test if debug output buffer size will not be exceeded.
   uint32_t obuf_record_sz = GetStageOutputRecordSize() +
       validation_data.size();
-  uint32_t obuf_ac_id = TakeNextId();
-  AddBinaryOp(GetOutputBufferUintPtrId(), obuf_ac_id, SpvOpAccessChain,
+  uint32_t obuf_curr_sz_ac_id = TakeNextId();
+  AddBinaryOp(GetOutputBufferUintPtrId(), obuf_curr_sz_ac_id, SpvOpAccessChain,
       GetOutputBufferId(), GetUintConstantId(kDebugOutputSizeOffset),
       new_blk_ptr);
   // Fetch the current debug buffer written size atomically, adding the
@@ -271,7 +302,7 @@ void InstrumentPass::GenDebugOutputCode(
   uint32_t obuf_curr_sz_id = TakeNextId();
   AddQuadOp(GetTypeId(&analysis::Integer(32, false)), obuf_curr_sz_id,
       SpvOpAtomicIAdd,
-      obuf_ac_id,
+      obuf_curr_sz_ac_id,
       GetUintConstantId(SpvScopeInvocation),
       GetUintConstantId(SpvMemoryAccessMaskNone),
       GetUintConstantId(obuf_record_sz),
@@ -305,8 +336,8 @@ void InstrumentPass::GenDebugOutputCode(
   new_blk_ptr->reset(new BasicBlock(std::move(validLabel)));
   // TODO(greg-lunarg): Add support for all stages
   // TODO(greg-lunarg): Assert fragment shader
-  GenCommonDebugOutputCode(new_blocks, new_blk_ptr);
-  GenFragDebugOutputCode(new_blocks, new_blk_ptr);
+  GenCommonDebugOutputCode(obuf_record_sz, obuf_curr_sz_id, new_blk_ptr);
+  GenFragDebugOutputCode(obuf_curr_sz_id, new_blk_ptr);
   // Close write block and gen merge block
   AddBranch(mergeBlkId, new_blk_ptr);
   new_blocks->push_back(std::move(*new_blk_ptr));

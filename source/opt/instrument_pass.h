@@ -59,17 +59,24 @@ class InstrumentPass : public Pass {
 
   // Return id for unsigned int constant value |u|.
   uint32_t GetUintConstantId(uint32_t u);
+  
+  void GenDebugOutputFieldCode(
+    uint32_t base_offset_id,
+    uint32_t field_offset,
+    uint32_t field_value_id,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Generate instructions which will write the fragment-shader-specific and
   // validation-specific members of the debug output buffer.
   void GenCommonDebugOutputCode(
-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    uint32_t record_sz,
+    uint32_t base_off,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Generate instructions which will write the fragment-shader-specific and
   // validation-specific members of the debug output buffer.
   void GenFragDebugOutputCode(
-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    uint32_t base_off,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Return size of common and stage-specific output record members
@@ -96,6 +103,13 @@ class InstrumentPass : public Pass {
   void AddBinaryOp(
     uint32_t type_id, uint32_t result_id, SpvOp opcode,
     uint32_t operand1, uint32_t operand2,
+    std::unique_ptr<BasicBlock>* block_ptr);
+
+  // Add binary instruction |type_id, opcode, operand1, operand2| to
+  // |block_ptr| and return resultId.
+  void AddTernaryOp(
+    uint32_t type_id, uint32_t result_id, SpvOp opcode,
+    uint32_t operand1, uint32_t operand2, uint32_t operand3,
     std::unique_ptr<BasicBlock>* block_ptr);
   
   void AddQuadOp(uint32_t type_id, uint32_t result_id,
