@@ -24,11 +24,10 @@
 #include <vector>
 
 #include "decoration_manager.h"
-#include "module.h"
 #include "pass.h"
 
 // Validation Ids
-static const int kValidationIdBindless;
+static const int kInstValidationIdBindless = 0;
 
 namespace spvtools {
 namespace opt {
@@ -40,6 +39,8 @@ class InstrumentPass : public Pass {
  public:
   using GetBlocksFunction =
       std::function<std::vector<BasicBlock*>*(const BasicBlock*)>;
+
+  using InstProcessFunction = std::function<bool(Function*, uint32_t)>;
 
   virtual ~InstrumentPass() = default;
 
@@ -70,6 +71,10 @@ class InstrumentPass : public Pass {
   // validation-specific members of the debug output buffer.
   void GenCommonDebugOutputCode(
     uint32_t record_sz,
+    uint32_t validation_id,
+    uint32_t func_idx,
+    uint32_t instruction_idx,
+    uint32_t stage_idx,
     uint32_t base_off,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
@@ -88,7 +93,8 @@ class InstrumentPass : public Pass {
     uint32_t validation_id,
     uint32_t func_idx,
     uint32_t instruction_idx,
-    std::vector<uint32_t> &validation_data,
+    uint32_t stage_idx,
+    const std::vector<uint32_t> &validation_data,
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
@@ -253,6 +259,16 @@ class InstrumentPass : public Pass {
 
   // Return id for output buffer
   uint32_t GetOutputBufferId();
+  
+  bool InstProcessCallTreeFromRoots(
+    InstProcessFunction& pfn,
+    const std::unordered_map<uint32_t, Function*>& id2function,
+    std::queue<uint32_t>* roots,
+    uint32_t stage_idx);
+
+  bool InstProcessEntryPointCallTree(
+    InstProcessFunction& pfn,
+    Module* module);
 
   // Initialize state for optimization of |module|
   void InitializeInstrument();

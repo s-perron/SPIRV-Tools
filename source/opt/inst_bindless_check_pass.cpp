@@ -44,7 +44,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     BasicBlock::iterator ref_inst_itr,
     UptrVectorIterator<BasicBlock> ref_block_itr,
     uint32_t function_idx,
-    uint32_t instruction_idx) {
+    uint32_t instruction_idx,
+    uint32_t stage_idx) {
   // Look for reference through bindless descriptor. If not, return.
   std::unique_ptr<BasicBlock> new_blk_ptr;
   uint32_t sampledImageId;
@@ -112,8 +113,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
         lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx)) {
       MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-      GenDebugOutputCode(kValidationIdBindless, function_idx, instruction_idx,
-          { 0, 0 }, new_blocks, &new_blk_ptr);
+      GenDebugOutputCode(kInstValidationIdBindless, function_idx, instruction_idx,
+          stage_idx, { 0, 0 }, new_blocks, &new_blk_ptr);
       // Set the original reference id to zero. Kill original reference
       // before reusing id.
       uint32_t ref_type_id = ref_inst_itr->type_id();
@@ -189,8 +190,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
-    GenDebugOutputCode(kValidationIdBindless, function_idx, instruction_idx,
-        { 0, 0 }, new_blocks, &new_blk_ptr);
+    GenDebugOutputCode(kInstValidationIdBindless, function_idx, instruction_idx,
+        stage_idx, { 0, 0 }, new_blocks, &new_blk_ptr);
     // Gen zero for invalid  reference
     uint32_t ref_type_id = ref_inst_itr->type_id();
     uint32_t nullId = GetNullId(ref_type_id);
@@ -211,7 +212,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   new_blocks->push_back(std::move(new_blk_ptr));
 }
 
-bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
+bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx) {
   bool modified = false;
   // Compute function index
   uint32_t function_idx = 0;
@@ -229,10 +230,10 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func) {
     ++instruction_idx;
     for (auto ii = bi->begin(); ii != bi->end(); ++instruction_idx) {
       // Bump instruction count if debug instructions
-      instruction_idx += ii->dbg_line_insts().size;
+      instruction_idx += static_cast<uint32_t>(ii->dbg_line_insts().size());
       // Generate bindless check if warranted
       GenBindlessCheckCode(&newBlocks, &newVars, ii, bi, function_idx,
-          instruction_idx);
+          instruction_idx, stage_idx);
       if (newBlocks.size() == 0) {
         ++ii;
         continue;
@@ -279,9 +280,10 @@ void InstBindlessCheckPass::InitializeInstBindlessCheck() {
 }
 
 Pass::Status InstBindlessCheckPass::ProcessImpl() {
-  // Attempt exhaustive inlining on each entry point function in module
-  ProcessFunction pfn = [this](Function* fp) { return InstBindlessCheck(fp); };
-  bool modified = ProcessEntryPointCallTree(pfn, get_module());
+  // Perform instrumentation on each entry point function in module
+  InstProcessFunction pfn = [this](Function* fp, uint32_t stage_idx) { 
+      return InstBindlessCheck(fp, stage_idx); };
+  bool modified = InstProcessEntryPointCallTree(pfn, get_module());
   // This pass does not update def/use info
   context()->InvalidateAnalyses(IRContext::kAnalysisDefUse);
   // TODO(greg-lunarg): If modified, do CFGCleanup, DCE

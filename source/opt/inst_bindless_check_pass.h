@@ -57,7 +57,8 @@ class InstBindlessCheckPass : public InstrumentPass {
      BasicBlock::iterator ref_inst_itr,
      UptrVectorIterator<BasicBlock> ref_block_itr,
      uint32_t function_idx,
-     uint32_t instruction_idx);
+     uint32_t instruction_idx,
+     uint32_t stage_idx);
 
    // Instrument all bindless references in func. Specifically,
    // generate code to check that the index into the descriptor array is
@@ -65,7 +66,7 @@ class InstBindlessCheckPass : public InstrumentPass {
    // descriptor has been written. If the check passes, execute the remainder
    // of the reference, otherwise write a record to the debug output buffer
    // and replace the reference with 0. Return true if func is modified.
-  bool InstBindlessCheck(Function* func);
+  bool InstBindlessCheck(Function* func, uint32_t stage_idx);
 
   Pass::Status ProcessImpl();
 

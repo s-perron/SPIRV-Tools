@@ -50,6 +50,8 @@ static const int kSpvFunctionCallArgumentId = 3;
 static const int kSpvReturnValueId = 0;
 static const int kSpvLoopMergeMergeBlockId = 0;
 static const int kSpvLoopMergeContinueTargetIdInIdx = 1;
+static const int kEntryPointExecutionModelInIdx = 0;
+static const int kEntryPointFunctionIdInIdx = 1;
 
 namespace spvtools {
 namespace opt {
@@ -265,11 +267,31 @@ void InstrumentPass::GenDebugOutputFieldCode(
 
 void InstrumentPass::GenCommonDebugOutputCode(
     uint32_t record_sz,
+    uint32_t validation_id,
+    uint32_t func_idx,
+    uint32_t instruction_idx,
+    uint32_t stage_idx,
     uint32_t base_offset_id,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
   // Store record size
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutSize,
       GetUintConstantId(record_sz), new_blk_ptr);
+  // Store Validation Id
+  GenDebugOutputFieldCode(base_offset_id, kInstCommonOutValidationId,
+      GetUintConstantId(validation_id), new_blk_ptr);
+  // Store Shader Id
+  // TODO(greg-lunarg): Get shader id from command argument
+  GenDebugOutputFieldCode(base_offset_id, kInstCommonOutShaderId,
+      GetUintConstantId(23), new_blk_ptr);
+  // Store Function Idx
+  GenDebugOutputFieldCode(base_offset_id, kInstCommonOutFunctionIdx,
+      GetUintConstantId(func_idx), new_blk_ptr);
+  // Store Instruction Idx
+  GenDebugOutputFieldCode(base_offset_id, kInstCommonOutInstructionIdx,
+      GetUintConstantId(instruction_idx), new_blk_ptr);
+  // Store Stage Idx
+  GenDebugOutputFieldCode(base_offset_id, kInstCommonOutStageIdx,
+      GetUintConstantId(stage_idx), new_blk_ptr);
 }
 
 void InstrumentPass::GenFragDebugOutputCode(
@@ -284,15 +306,16 @@ uint32_t InstrumentPass::GetStageOutputRecordSize() {
 }
 
 void InstrumentPass::GenDebugOutputCode(
-  uint32_t validation_id,
-  uint32_t func_idx,
-  uint32_t instruction_idx,
-  std::vector<uint32_t> &validation_data,
-  std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-  std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    uint32_t validation_id,
+    uint32_t func_idx,
+    uint32_t instruction_idx,
+    uint32_t stage_idx,
+    const std::vector<uint32_t> &validation_data,
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
   // Gen test if debug output buffer size will not be exceeded.
   uint32_t obuf_record_sz = GetStageOutputRecordSize() +
-      validation_data.size();
+      static_cast<uint32_t>(validation_data.size());
   uint32_t obuf_curr_sz_ac_id = TakeNextId();
   AddBinaryOp(GetOutputBufferUintPtrId(), obuf_curr_sz_ac_id, SpvOpAccessChain,
       GetOutputBufferId(), GetUintConstantId(kDebugOutputSizeOffset),
@@ -334,10 +357,14 @@ void InstrumentPass::GenDebugOutputCode(
   // Close safety test block and gen write block
   new_blocks->push_back(std::move(*new_blk_ptr));
   new_blk_ptr->reset(new BasicBlock(std::move(validLabel)));
+  GenCommonDebugOutputCode(obuf_record_sz, validation_id, func_idx,
+      instruction_idx, stage_idx, obuf_curr_sz_id,
+      new_blk_ptr);
   // TODO(greg-lunarg): Add support for all stages
-  // TODO(greg-lunarg): Assert fragment shader
-  GenCommonDebugOutputCode(obuf_record_sz, obuf_curr_sz_id, new_blk_ptr);
-  GenFragDebugOutputCode(obuf_curr_sz_id, new_blk_ptr);
+  if (stage_idx == SpvExecutionModelFragment)
+    GenFragDebugOutputCode(obuf_curr_sz_id, new_blk_ptr);
+  else
+    assert(false && "unsupported stage");
   // Close write block and gen merge block
   AddBranch(mergeBlkId, new_blk_ptr);
   new_blocks->push_back(std::move(*new_blk_ptr));
@@ -988,6 +1015,48 @@ uint32_t InstrumentPass::GetOutputBufferId() {
     AddDecoration(output_buffer_id_, SpvDecorationBinding, kDebugOutputBinding);
   }
   return output_buffer_id_;
+}
+
+bool InstrumentPass::InstProcessCallTreeFromRoots(
+  InstProcessFunction& pfn,
+  const std::unordered_map<uint32_t, Function*>& id2function,
+  std::queue<uint32_t>* roots,
+  uint32_t stage_idx) {
+  // Process call tree
+  bool modified = false;
+  std::unordered_set<uint32_t> done;
+
+  while (!roots->empty()) {
+    const uint32_t fi = roots->front();
+    roots->pop();
+    if (done.insert(fi).second) {
+      Function* fn = id2function.at(fi);
+      modified = pfn(fn, stage_idx) || modified;
+      AddCalls(fn, roots);
+    }
+  }
+  return modified;
+}
+
+bool InstrumentPass::InstProcessEntryPointCallTree(
+    InstProcessFunction& pfn,
+    Module* module) {
+  // Map from function's result id to function
+  std::unordered_map<uint32_t, Function*> id2function;
+  for (auto& fn : *module) id2function[fn.result_id()] = &fn;
+
+  // Collect all of the entry points as the roots.
+  std::queue<uint32_t> roots;
+  for (auto& e : module->entry_points()) {
+    // TODO(greg-lunarg): Handle all stages. In particular, we will need
+    // to clone any functions which are in the call trees of entrypoints
+    // with differing execution models.
+    if (e.GetSingleWordInOperand(kEntryPointExecutionModelInIdx) != 
+        SpvExecutionModelFragment)
+      continue;
+    roots.push(e.GetSingleWordInOperand(kEntryPointFunctionIdInIdx));
+  }
+  return InstProcessCallTreeFromRoots(pfn, id2function, &roots, SpvExecutionModelFragment);
 }
 
 void InstrumentPass::InitializeInstrument() {
