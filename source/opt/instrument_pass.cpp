@@ -18,28 +18,23 @@
 
 #include "cfa.h"
 
-// Debug Buffer Bindings
-static const int kDebugOutputBinding = 0;
-static const int kDebugInputBinding = 1;
-
 // Debug Buffer Offsets
 static const int kDebugOutputSizeOffset = 0;
 static const int kDebugOutputDataOffset = 1;
 
 // Common Output Record Offsets
 static const int kInstCommonOutSize = 0;
-static const int kInstCommonOutValidationId = 1;
-static const int kInstCommonOutShaderId = 2;
-static const int kInstCommonOutFunctionIdx = 3;
-static const int kInstCommonOutInstructionIdx = 4;
-static const int kInstCommonOutStageIdx = 5;
+static const int kInstCommonOutShaderId = 1;
+static const int kInstCommonOutFunctionIdx = 2;
+static const int kInstCommonOutInstructionIdx = 3;
+static const int kInstCommonOutStageIdx = 4;
 
 // Frag Shader Output Record Offsets
-static const int kInstFragOutFragCoordX = 6;
-static const int kInstFragOutFragCoordY = 7;
-static const int kInstFragOutFragCoordZ = 8;
-static const int kInstFragOutFragCoordW = 9;
-static const int kInstFragOutRecordSize = 10;
+static const int kInstFragOutFragCoordX = 5;
+static const int kInstFragOutFragCoordY = 6;
+static const int kInstFragOutFragCoordZ = 7;
+static const int kInstFragOutFragCoordW = 8;
+static const int kInstFragOutRecordSize = 9;
 
 // Indices of operands in SPIR-V instructions
 static const int kSpvFunctionCallFunctionId = 2;
@@ -275,7 +270,6 @@ void InstrumentPass::GenDebugOutputFieldCode(
 
 void InstrumentPass::GenCommonDebugOutputCode(
     uint32_t record_sz,
-    uint32_t validation_id,
     uint32_t func_idx,
     uint32_t instruction_idx,
     uint32_t stage_idx,
@@ -284,9 +278,6 @@ void InstrumentPass::GenCommonDebugOutputCode(
   // Store record size
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutSize,
       GetUintConstantId(record_sz), new_blk_ptr);
-  // Store Validation Id
-  GenDebugOutputFieldCode(base_offset_id, kInstCommonOutValidationId,
-      GetUintConstantId(validation_id), new_blk_ptr);
   // Store Shader Id
   // TODO(greg-lunarg): Get shader id from command argument
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutShaderId,
@@ -336,7 +327,6 @@ uint32_t InstrumentPass::GetStageOutputRecordSize() {
 }
 
 void InstrumentPass::GenDebugOutputCode(
-    uint32_t validation_id,
     uint32_t func_idx,
     uint32_t instruction_idx,
     uint32_t stage_idx,
@@ -387,14 +377,24 @@ void InstrumentPass::GenDebugOutputCode(
   // Close safety test block and gen write block
   new_blocks->push_back(std::move(*new_blk_ptr));
   new_blk_ptr->reset(new BasicBlock(std::move(validLabel)));
-  GenCommonDebugOutputCode(obuf_record_sz, validation_id, func_idx,
+  GenCommonDebugOutputCode(obuf_record_sz, func_idx,
       instruction_idx, stage_idx, obuf_curr_sz_id,
       new_blk_ptr);
   // TODO(greg-lunarg): Add support for all stages
-  if (stage_idx == SpvExecutionModelFragment)
+  uint32_t curr_record_offset = 0;
+  if (stage_idx == SpvExecutionModelFragment) {
     GenFragDebugOutputCode(obuf_curr_sz_id, new_blk_ptr);
-  else
+    curr_record_offset = kInstFragOutRecordSize;
+  }
+  else {
     assert(false && "unsupported stage");
+  }
+  // Gen writes of validation specific data
+  for (auto vid : validation_data) {
+    GenDebugOutputFieldCode(obuf_curr_sz_id, curr_record_offset,
+        vid, new_blk_ptr);
+    ++curr_record_offset;
+  }
   // Close write block and gen merge block
   AddBranch(mergeBlkId, new_blk_ptr);
   new_blocks->push_back(std::move(*new_blk_ptr));
@@ -1023,6 +1023,14 @@ uint32_t InstrumentPass::GetOutputBufferUintPtrId() {
   return output_buffer_uint_ptr_id_;
 }
 
+uint32_t InstrumentPass::GetOutputBufferBinding() {
+  switch (validation_id_) {
+    case kInstValidationIdBindless: return kDebugOutputBindingBindless;
+    default: assert(false && "unexpected validation id");
+  }
+  return 0;
+}
+
 // Return id for output buffer
 uint32_t InstrumentPass::GetOutputBufferId() {
   if (output_buffer_id_ == 0) {
@@ -1042,7 +1050,8 @@ uint32_t InstrumentPass::GetOutputBufferId() {
     get_module()->AddGlobalValue(std::move(newVarOp));
     // TODO(greg-lunarg): Get debug descriptor set from command argument
     AddDecoration(output_buffer_id_, SpvDecorationDescriptorSet, 7);
-    AddDecoration(output_buffer_id_, SpvDecorationBinding, kDebugOutputBinding);
+    AddDecoration(output_buffer_id_, SpvDecorationBinding,
+        GetOutputBufferBinding());
   }
   return output_buffer_id_;
 }
@@ -1123,8 +1132,9 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
   return InstProcessCallTreeFromRoots(pfn, id2function, &roots, SpvExecutionModelFragment);
 }
 
-void InstrumentPass::InitializeInstrument() {
+void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
   false_id_ = 0;
+  validation_id_ = validation_id;
   output_buffer_id_ = 0;
   output_buffer_uint_ptr_id_ = 0;
   frag_coord_id_ = 0;

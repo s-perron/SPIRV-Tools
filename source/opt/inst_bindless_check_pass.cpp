@@ -113,7 +113,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
         lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx)) {
       MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-      GenDebugOutputCode(kInstValidationIdBindless, function_idx, instruction_idx,
+      GenDebugOutputCode(function_idx, instruction_idx,
           stage_idx, { 0, 0 }, new_blocks, &new_blk_ptr);
       // Set the original reference id to zero. Kill original reference
       // before reusing id.
@@ -190,8 +190,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
-    GenDebugOutputCode(kInstValidationIdBindless, function_idx, instruction_idx,
-        stage_idx, { 0, 0 }, new_blocks, &new_blk_ptr);
+    GenDebugOutputCode(function_idx, instruction_idx,
+        stage_idx, { indexId, lengthId }, new_blocks, &new_blk_ptr);
     // Gen zero for invalid  reference
     uint32_t ref_type_id = ref_inst_itr->type_id();
     uint32_t nullId = GetNullId(ref_type_id);
@@ -266,7 +266,7 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
 
 void InstBindlessCheckPass::InitializeInstBindlessCheck() {
   // Initialize base class
-  InitializeInstrument();
+  InitializeInstrument(kInstValidationIdBindless);
   // Look for related extensions
   ext_descriptor_indexing_defined_ = false;
   for (auto& ei : get_module()->extensions()) {
