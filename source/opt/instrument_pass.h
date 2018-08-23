@@ -78,6 +78,12 @@ class InstrumentPass : public Pass {
     uint32_t base_off,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
+  void GenFragCoordEltDebugOutputCode(
+    uint32_t base_offset_id,
+    uint32_t uint_frag_coord_id,
+    uint32_t element,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
   // Generate instructions which will write the fragment-shader-specific and
   // validation-specific members of the debug output buffer.
   void GenFragDebugOutputCode(
@@ -121,6 +127,13 @@ class InstrumentPass : public Pass {
   void AddQuadOp(uint32_t type_id, uint32_t result_id,
     SpvOp opcode, uint32_t operand1, uint32_t operand2, uint32_t operand3,
     uint32_t operand4, std::unique_ptr<BasicBlock>* block_ptr);
+
+  // Add binary instruction |type_id, opcode, operand1, operand2| to
+  // |block_ptr| and return resultId.
+  void AddExtractOp(
+    uint32_t type_id, uint32_t result_id,
+    uint32_t operand1, uint32_t operand2,
+    std::unique_ptr<BasicBlock>* block_ptr);
 
   void AddArrayLength(uint32_t result_id,
     uint32_t struct_ptr_id, uint32_t member_idx,
@@ -259,6 +272,15 @@ class InstrumentPass : public Pass {
 
   // Return id for output buffer
   uint32_t GetOutputBufferId();
+
+  // Return id for FragCoord variable
+  uint32_t GetFragCoordId();
+
+  // Return id for v4float type
+  uint32_t GetVec4FloatId();
+
+  // Return id for v4uint type
+  uint32_t GetVec4UintId();
   
   bool InstProcessCallTreeFromRoots(
     InstProcessFunction& pfn,
@@ -292,11 +314,20 @@ class InstrumentPass : public Pass {
   // result id for OpConstantFalse
   uint32_t false_id_;
 
-  // id for output buffer
+  // id for output buffer variable
   uint32_t output_buffer_id_;
 
   // type id for output buffer element
   uint32_t output_buffer_uint_ptr_id_;
+
+  // id for FragCoord
+  uint32_t frag_coord_id_;
+
+  // id for v4float type
+  uint32_t v4float_id_;
+
+  // id for v4uint type
+  uint32_t v4uint_id_;
 
   // Map from block to its structured successor blocks. See
   // ComputeStructuredSuccessors() for definition. TODO(dnovillo): This is

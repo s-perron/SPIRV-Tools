@@ -18,9 +18,6 @@
 
 #include "cfa.h"
 
-// Validation Ids
-static const int kValidationIdBindless = 0;
-
 // Debug Buffer Bindings
 static const int kDebugOutputBinding = 0;
 static const int kDebugInputBinding = 1;
@@ -149,6 +146,17 @@ void InstrumentPass::AddQuadOp(uint32_t type_id, uint32_t result_id,
       { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand4 } } }));
   get_def_use_mgr()->AnalyzeInstDefUse(&*newQuadOp);
   (*block_ptr)->AddInstruction(std::move(newQuadOp));
+}
+
+void InstrumentPass::AddExtractOp(uint32_t type_id, uint32_t result_id,
+  uint32_t operand1, uint32_t operand2,
+  std::unique_ptr<BasicBlock>* block_ptr) {
+  std::unique_ptr<Instruction> newBinOp(
+    new Instruction(context(), SpvOpCompositeExtract, type_id, result_id,
+    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+    { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,{ operand2 } } }));
+  get_def_use_mgr()->AnalyzeInstDefUse(&*newBinOp);
+  (*block_ptr)->AddInstruction(std::move(newBinOp));
 }
 
 void InstrumentPass::AddArrayLength(uint32_t result_id,
@@ -294,9 +302,31 @@ void InstrumentPass::GenCommonDebugOutputCode(
       GetUintConstantId(stage_idx), new_blk_ptr);
 }
 
-void InstrumentPass::GenFragDebugOutputCode(
-    uint32_t base_off,
+void InstrumentPass::GenFragCoordEltDebugOutputCode(
+    uint32_t base_offset_id,
+    uint32_t uint_frag_coord_id,
+    uint32_t element,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  uint32_t element_val_id = TakeNextId();
+  AddExtractOp(GetTypeId(&analysis::Integer(32, false)), element_val_id,
+      uint_frag_coord_id, element, new_blk_ptr);
+  GenDebugOutputFieldCode(base_offset_id, kInstFragOutFragCoordX + element,
+      element_val_id, new_blk_ptr);
+}
+
+void InstrumentPass::GenFragDebugOutputCode(
+    uint32_t base_offset_id,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  // Load FragCoord and convert to Uint
+  uint32_t frag_coord_id = TakeNextId();
+  AddUnaryOp(GetVec4FloatId(), frag_coord_id, SpvOpLoad, GetFragCoordId(),
+      new_blk_ptr);
+  uint32_t uint_frag_coord_id = TakeNextId();
+  AddUnaryOp(GetVec4UintId(), uint_frag_coord_id, SpvOpBitcast, frag_coord_id,
+      new_blk_ptr);
+  for (uint32_t u = 0; u < 4u; ++u)
+    GenFragCoordEltDebugOutputCode(base_offset_id,  uint_frag_coord_id, u,
+        new_blk_ptr);
 }
 
 uint32_t InstrumentPass::GetStageOutputRecordSize() {
@@ -1017,6 +1047,40 @@ uint32_t InstrumentPass::GetOutputBufferId() {
   return output_buffer_id_;
 }
 
+uint32_t InstrumentPass::GetVec4FloatId() {
+  if (v4float_id_ == 0) {
+    analysis::Vector v4floatTy(&analysis::Float(32), 4);
+    v4float_id_ = context()->get_type_mgr()->GetTypeInstruction(&v4floatTy);
+  }
+  return v4float_id_;
+}
+
+uint32_t InstrumentPass::GetVec4UintId() {
+  if (v4uint_id_ == 0) {
+    analysis::Vector v4uintTy(&analysis::Integer(32, false), 4);
+    v4uint_id_ = context()->get_type_mgr()->GetTypeInstruction(&v4uintTy);
+  }
+  return v4uint_id_;
+}
+
+// Return id for output buffer
+uint32_t InstrumentPass::GetFragCoordId() {
+  if (frag_coord_id_ == 0) {;
+    uint32_t fragCoordTyPtrId = context()->get_type_mgr()->FindPointerToType(
+      GetVec4FloatId(), SpvStorageClassInput);
+    frag_coord_id_ = TakeNextId();
+    std::unique_ptr<Instruction> newVarOp(
+      new Instruction(context(), SpvOpVariable, fragCoordTyPtrId,
+        frag_coord_id_,
+        { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
+          { SpvStorageClassInput } } }));
+    get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
+    get_module()->AddGlobalValue(std::move(newVarOp));
+    AddDecoration(output_buffer_id_, SpvDecorationBuiltIn, SpvBuiltInFragCoord);
+  }
+  return frag_coord_id_;
+}
+
 bool InstrumentPass::InstProcessCallTreeFromRoots(
   InstProcessFunction& pfn,
   const std::unordered_map<uint32_t, Function*>& id2function,
@@ -1063,6 +1127,9 @@ void InstrumentPass::InitializeInstrument() {
   false_id_ = 0;
   output_buffer_id_ = 0;
   output_buffer_uint_ptr_id_ = 0;
+  frag_coord_id_ = 0;
+  v4float_id_ = 0;
+  v4uint_id_ = 0;
 
   // clear collections
   id2function_.clear();
