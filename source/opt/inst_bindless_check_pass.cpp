@@ -25,8 +25,8 @@ static const int kSpvSampledImageImageIdInIdx = 0;
 static const int kSpvSampledImageSamplerIdInIdx = 1;
 static const int kSpvLoadPtrIdInIdx = 0;
 static const int kSpvAccessChainBaseIdInIdx = 0;
-static const int kSpvAccessChainIndex0IdInIdx = 0;
-static const int kSpvTypePointerTypeIdInIdx = 0;
+static const int kSpvAccessChainIndex0IdInIdx = 1;
+static const int kSpvTypePointerTypeIdInIdx = 1;
 static const int kSpvTypeArrayLengthIdInIdx = 1;
 static const int kSpvConstantValueInIdx = 0;
 
@@ -90,7 +90,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   Instruction* indexInst = get_def_use_mgr()->GetDef(indexId);
   ptrId = ptrInst->GetSingleWordInOperand(kSpvAccessChainBaseIdInIdx);
   ptrInst = get_def_use_mgr()->GetDef(ptrId);
-  if (ptrInst->opcode() == SpvOpVariable) {
+  if (ptrInst->opcode() != SpvOpVariable) {
     assert(false && "unexpected bindless base");
     return;
   }
@@ -183,9 +183,9 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
         break;
     }
     // Register new reference
+    uint32_t ref_result_id = ref_inst_itr->result_id();
     get_def_use_mgr()->AnalyzeInstDefUse(&*newRefInst);
-    get_decoration_mgr()->CloneDecorations(ref_inst_itr->result_id(),
-        newRefId);
+    get_decoration_mgr()->CloneDecorations(ref_result_id, newRefId);
     // Close valid block and gen invalid block
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
@@ -203,7 +203,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     // so we don't have to do a replace. Kill original reference before reusing
     // its id.
     context()->KillInst(&*ref_inst_itr);
-    AddPhi(ref_type_id, ref_inst_itr->result_id(), newRefId, validBlkId,
+    AddPhi(ref_type_id, ref_result_id, newRefId, validBlkId,
         nullId, invalidBlkId, &new_blk_ptr);
     // Move remainder of original block instructions into merge block
     MovePostludeCode(ref_block_itr, &new_blk_ptr);
@@ -257,8 +257,8 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
       modified = true;
       // Restart instrumenting at beginning of last new block.
       ii = bi->begin();
-      assert(newBlocks.size() == 0);
-      assert(newVars.size() == 0);
+      newBlocks.clear();
+      newVars.clear();
     }
   }
   return modified;
