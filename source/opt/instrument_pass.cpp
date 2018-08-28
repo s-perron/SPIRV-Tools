@@ -586,10 +586,9 @@ uint32_t InstrumentPass::GetFragCoordId() {
 }
 
 bool InstrumentPass::InstProcessCallTreeFromRoots(
-  InstProcessFunction& pfn,
-  const std::unordered_map<uint32_t, Function*>& id2function,
-  std::queue<uint32_t>* roots,
-  uint32_t stage_idx) {
+    InstProcessFunction& pfn,
+    std::queue<uint32_t>* roots,
+    uint32_t stage_idx) {
   // Process call tree
   bool modified = false;
   std::unordered_set<uint32_t> done;
@@ -598,7 +597,7 @@ bool InstrumentPass::InstProcessCallTreeFromRoots(
     const uint32_t fi = roots->front();
     roots->pop();
     if (done.insert(fi).second) {
-      Function* fn = id2function.at(fi);
+      Function* fn = id2function_.at(fi);
       modified = pfn(fn, stage_idx) || modified;
       AddCalls(fn, roots);
     }
@@ -609,10 +608,6 @@ bool InstrumentPass::InstProcessCallTreeFromRoots(
 bool InstrumentPass::InstProcessEntryPointCallTree(
     InstProcessFunction& pfn,
     Module* module) {
-  // Map from function's result id to function
-  std::unordered_map<uint32_t, Function*> id2function;
-  for (auto& fn : *module) id2function[fn.result_id()] = &fn;
-
   // Process each of the entry points as a root.
   std::queue<uint32_t> roots;
   for (auto& e : module->entry_points()) {
@@ -625,7 +620,7 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
       continue;
     roots.push(e.GetSingleWordInOperand(kEntryPointFunctionIdInIdx));
   }
-  bool modified = InstProcessCallTreeFromRoots(pfn, id2function, &roots,
+  bool modified = InstProcessCallTreeFromRoots(pfn, &roots,
       SpvExecutionModelFragment);
   // If any function is modified, add FragCoord to all entry points that
   // don't have it.
@@ -655,7 +650,8 @@ void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
   id2block_.clear();
 
   for (auto& fn : *get_module()) {
-    // Initialize block maps.
+    // Initialize function and block maps.
+    id2function_[fn.result_id()] = &fn;
     for (auto& blk : fn) {
       id2block_[blk.id()] = &blk;
     }

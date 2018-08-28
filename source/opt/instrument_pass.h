@@ -64,15 +64,18 @@ class InstrumentPass : public Pass {
 
   // Return id for unsigned int constant value |u|.
   uint32_t GetUintConstantId(uint32_t u);
-  
+
+  // Gen code into |new_blk_ptr| to write |field_value_id| into debug output
+  // buffer at |base_offset_id| + |field_offset|.
   void GenDebugOutputFieldCode(
     uint32_t base_offset_id,
     uint32_t field_offset,
     uint32_t field_value_id,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
-  // Generate instructions which will write the fragment-shader-specific and
-  // validation-specific members of the debug output buffer.
+  // Generate instructions into |new_blk_ptr| which will write the members
+  // of the debug output buffer common for all stages and validations at
+  // |base_off|.
   void GenCommonDebugOutputCode(
     uint32_t record_sz,
     uint32_t func_idx,
@@ -81,14 +84,17 @@ class InstrumentPass : public Pass {
     uint32_t base_off,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
+  // Generate instructions into |new_blk_ptr| which will write
+  // |uint_frag_coord_id| at |component| of the record at |base_off| of
+  // the debug output buffer .
   void GenFragCoordEltDebugOutputCode(
     uint32_t base_offset_id,
     uint32_t uint_frag_coord_id,
-    uint32_t element,
+    uint32_t component,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
-  // Generate instructions which will write the fragment-shader-specific and
-  // validation-specific members of the debug output buffer.
+  // Generate instructions into |new_blk_ptr| which will write the fragment-
+  // shader-specific members of the debug output buffer at |base_off|.
   void GenFragDebugOutputCode(
     uint32_t base_off,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
@@ -106,37 +112,41 @@ class InstrumentPass : public Pass {
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
-  // Add binary instruction |type_id, opcode, operand1, operand2| to
-  // |block_ptr| and return resultId.
+  // Add binary instruction |type_id, result_id, opcode, operand1, operand2| to
+  // |block_ptr|.
   void AddUnaryOp(
     uint32_t type_id, uint32_t result_id, SpvOp opcode,
     uint32_t operand, std::unique_ptr<BasicBlock>* block_ptr);
 
-  // Add binary instruction |type_id, opcode, operand1, operand2| to
-  // |block_ptr| and return resultId.
+  // Add binary instruction |type_id, result_id, opcode, operand1, operand2| to
+  // |block_ptr|.
   void AddBinaryOp(
     uint32_t type_id, uint32_t result_id, SpvOp opcode,
     uint32_t operand1, uint32_t operand2,
     std::unique_ptr<BasicBlock>* block_ptr);
 
-  // Add binary instruction |type_id, opcode, operand1, operand2| to
-  // |block_ptr| and return resultId.
+  // Add ternary instruction |type_id, result_id, opcode, operand1, operand2,
+  // operand3| to |block_ptr|.
   void AddTernaryOp(
     uint32_t type_id, uint32_t result_id, SpvOp opcode,
     uint32_t operand1, uint32_t operand2, uint32_t operand3,
     std::unique_ptr<BasicBlock>* block_ptr);
-  
+
+  // Add quadernary instruction |type_id, result_id, opcode, operand1,
+  // operand2, operand3, operand4| to |block_ptr|.
   void AddQuadOp(uint32_t type_id, uint32_t result_id,
     SpvOp opcode, uint32_t operand1, uint32_t operand2, uint32_t operand3,
     uint32_t operand4, std::unique_ptr<BasicBlock>* block_ptr);
 
-  // Add binary instruction |type_id, opcode, operand1, operand2| to
+  // Add extract instruction |type_id, opcode, operand1, operand2| to
   // |block_ptr| and return resultId.
   void AddExtractOp(
     uint32_t type_id, uint32_t result_id,
     uint32_t operand1, uint32_t operand2,
     std::unique_ptr<BasicBlock>* block_ptr);
 
+  // Add array length instruction |type_id, opcode, struct_ptr_id, member_idx|
+  // to |block_ptr| and return resultId.
   void AddArrayLength(uint32_t result_id,
     uint32_t struct_ptr_id, uint32_t member_idx,
     std::unique_ptr<BasicBlock>* block_ptr);
@@ -147,8 +157,11 @@ class InstrumentPass : public Pass {
     uint32_t mergeBlockId, uint32_t selectionControl,
     std::unique_ptr<BasicBlock>* block_ptr);
 
+  // Return id of pointer to builtin |builtin_val|.
   uint32_t FindBuiltin(uint32_t builtin_val);
   
+  // Add |decoration, decoration_value| of |inst_id| to module. Also
+  // update decoration manager.
   void AddDecoration(uint32_t inst_id, uint32_t decoration,
     uint32_t decoration_value);
 
@@ -159,6 +172,7 @@ class InstrumentPass : public Pass {
   void AddBranchCond(uint32_t cond_id, uint32_t true_id, uint32_t false_id,
                      std::unique_ptr<BasicBlock>* block_ptr);
 
+  // Add Phi to |block_ptr|.
   void AddPhi(uint32_t type_id, uint32_t result_id, uint32_t var0_id,
               uint32_t parent0_id, uint32_t var1_id, uint32_t parent1_id,
               std::unique_ptr<BasicBlock>* block_ptr);
@@ -192,6 +206,7 @@ class InstrumentPass : public Pass {
   // Return id for output buffer uint type
   uint32_t GetOutputBufferUintPtrId();
   
+  // Return binding for output buffer for current validation.
   uint32_t GetOutputBufferBinding();
 
   // Return id for output buffer
@@ -206,18 +221,24 @@ class InstrumentPass : public Pass {
   // Return id for v4uint type
   uint32_t GetVec4UintId();
   
+  // Call |pfn| on all functions in the call tree of the function
+  // ids in |roots|. 
   bool InstProcessCallTreeFromRoots(
     InstProcessFunction& pfn,
-    const std::unordered_map<uint32_t, Function*>& id2function,
     std::queue<uint32_t>* roots,
     uint32_t stage_idx);
 
+  // Call |pfn| on all functions in the call tree of the entry points
+  // in |module|.
   bool InstProcessEntryPointCallTree(
     InstProcessFunction& pfn,
     Module* module);
 
-  // Initialize state for optimization of |module|
+  // Initialize state for optimization of module
   void InitializeInstrument(uint32_t validation_id);
+
+  // Map from function id to function pointer.
+  std::unordered_map<uint32_t, Function*> id2function_;
 
   // Map from block's label id to block. TODO(dnovillo): This is superfluous wrt
   // CFG. It has functionality not present in CFG. Consolidate.
