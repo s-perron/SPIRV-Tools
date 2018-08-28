@@ -276,18 +276,18 @@ uint32_t InstrumentPass::GetNullId(uint32_t type_id) {
   const analysis::Type* type = type_mgr->GetType(type_id);
   const analysis::Constant* null_const = const_mgr->GetConstant(type, {});
   Instruction* null_inst =
-    const_mgr->GetDefiningInstruction(null_const, type_id);
+      const_mgr->GetDefiningInstruction(null_const, type_id);
   return null_inst->result_id();
 }
 
 uint32_t InstrumentPass::GetUintConstantId(uint32_t u) {
   analysis::TypeManager* type_mgr = context()->get_type_mgr();
   analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
-  analysis::Integer uintTy(32, false);
-  const analysis::Constant* uint_const = const_mgr->GetConstant(&uintTy, {u});
+  analysis::Type* uint_ty = type_mgr->GetRegisteredType(
+      &analysis::Integer(32, false));
+  const analysis::Constant* uint_const = const_mgr->GetConstant(uint_ty, {u});
   Instruction* uint_inst = const_mgr->GetDefiningInstruction(uint_const);
   return uint_inst->result_id();
-
 }
 
 void InstrumentPass::GenDebugOutputFieldCode(
@@ -300,8 +300,8 @@ void InstrumentPass::GenDebugOutputFieldCode(
       base_offset_id, GetUintConstantId(field_offset), new_blk_ptr);
   uint32_t achain_id = TakeNextId();
   AddTernaryOp(GetOutputBufferUintPtrId(), achain_id, SpvOpAccessChain,
-    GetOutputBufferId(), GetUintConstantId(kDebugOutputDataOffset),
-    data_idx_id, new_blk_ptr);
+      GetOutputBufferId(), GetUintConstantId(kDebugOutputDataOffset),
+      data_idx_id, new_blk_ptr);
   AddBinaryOp(0, 0, SpvOpStore, achain_id, field_value_id, new_blk_ptr);
 }
 
@@ -397,7 +397,7 @@ void InstrumentPass::GenDebugOutputCode(
   uint32_t obuf_bnd_id = TakeNextId();
   AddArrayLength(obuf_bnd_id,
       GetOutputBufferId(),
-      GetUintConstantId(kDebugOutputDataOffset),
+      kDebugOutputDataOffset,
       new_blk_ptr);
   // Test that new written size is less than or equal to debug output
   // data bound
@@ -1136,7 +1136,7 @@ uint32_t InstrumentPass::GetFragCoordId() {
           { SpvStorageClassInput } } }));
     get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
     get_module()->AddGlobalValue(std::move(newVarOp));
-    AddDecoration(output_buffer_id_, SpvDecorationBuiltIn, SpvBuiltInFragCoord);
+    AddDecoration(frag_coord_id_, SpvDecorationBuiltIn, SpvBuiltInFragCoord);
   }
   return frag_coord_id_;
 }
