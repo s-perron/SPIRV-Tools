@@ -44,6 +44,12 @@ static const int kSpvLoopMergeMergeBlockId = 0;
 static const int kSpvLoopMergeContinueTargetIdInIdx = 1;
 static const int kEntryPointExecutionModelInIdx = 0;
 static const int kEntryPointFunctionIdInIdx = 1;
+static const int kEntryPointInterfaceInIdx = 3;
+static const int kSpvDecorateTargetIdInIdx = 0;
+static const int kSpvDecorateDecorationInIdx = 1;
+static const int kSpvDecorateBuiltinInIdx = 2;
+static const int kSpvMemberDecorateDecorationInIdx = 2;
+static const int kSpvMemberDecorateBuiltinInIdx = 3;
 
 namespace spvtools {
 namespace opt {
@@ -77,7 +83,7 @@ void InstrumentPass::MovePreludeCode(
 void InstrumentPass::MovePostludeCode(
   UptrVectorIterator<BasicBlock> ref_block_itr,
   std::unique_ptr<BasicBlock>* new_blk_ptr) {
-  new_blk_ptr->reset(new BasicBlock(NewLabel(ref_block_itr->id())));
+  // new_blk_ptr->reset(new BasicBlock(NewLabel(ref_block_itr->id())));
   // Move contents of original ref block.
   for (auto cii = ref_block_itr->begin(); cii != ref_block_itr->end();
       cii = ref_block_itr->begin()) {
@@ -168,6 +174,35 @@ void InstrumentPass::AddArrayLength(uint32_t result_id,
   (*block_ptr)->AddInstruction(std::move(newALenOp));
 }
 
+uint32_t InstrumentPass::FindBuiltin(uint32_t builtin_val) {
+  for (auto& a : get_module()->annotations()) {
+    if (a.opcode() == SpvOpDecorate) {
+      if (a.GetSingleWordInOperand(kSpvDecorateDecorationInIdx) !=
+          SpvDecorationBuiltIn)
+        continue;
+      if (a.GetSingleWordInOperand(kSpvDecorateBuiltinInIdx) != builtin_val)
+        continue;
+      uint32_t target_id = a.GetSingleWordInOperand(kSpvDecorateTargetIdInIdx);
+      Instruction* b_var = context()->get_def_use_mgr()->GetDef(target_id);
+      // TODO(greg-lunarg): Support group builtins
+      assert(b_var->opcode() == SpvOpVariable && "unexpected group builtin");
+      return target_id;
+    }
+    else if (a.opcode() == SpvOpMemberDecorate) {
+      if (a.GetSingleWordInOperand(kSpvMemberDecorateDecorationInIdx) !=
+          SpvDecorationBuiltIn)
+        continue;
+      if (a.GetSingleWordInOperand(kSpvMemberDecorateBuiltinInIdx) !=
+          builtin_val)
+        continue;
+      // TODO(greg-lunarg): Support member builtins
+      assert(false && "unexpected member builtin");
+      return 0;
+    }
+  }
+  return 0;
+}
+
 void InstrumentPass::AddDecoration(uint32_t inst_id, uint32_t decoration,
     uint32_t decoration_value) {
   std::unique_ptr<Instruction> newDecoOp(
@@ -179,6 +214,7 @@ void InstrumentPass::AddDecoration(uint32_t inst_id, uint32_t decoration,
         { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
           { decoration_value } } }));
   get_def_use_mgr()->AnalyzeInstDefUse(&*newDecoOp);
+  get_decoration_mgr()->AddDecoration(&*newDecoOp);
   get_module()->AddAnnotationInst(std::move(newDecoOp));
 }
 
@@ -1085,9 +1121,11 @@ uint32_t InstrumentPass::GetVec4UintId() {
   return v4uint_id_;
 }
 
-// Return id for output buffer
 uint32_t InstrumentPass::GetFragCoordId() {
-  if (frag_coord_id_ == 0) {;
+  // If not yet known, look for one in shader
+  if (frag_coord_id_ == 0) frag_coord_id_ = FindBuiltin(SpvBuiltInFragCoord);
+  // If none in shader, create one
+  if (frag_coord_id_ == 0) {
     uint32_t fragCoordTyPtrId = context()->get_type_mgr()->FindPointerToType(
       GetVec4FloatId(), SpvStorageClassInput);
     frag_coord_id_ = TakeNextId();
@@ -1131,10 +1169,11 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
   std::unordered_map<uint32_t, Function*> id2function;
   for (auto& fn : *module) id2function[fn.result_id()] = &fn;
 
-  // Collect all of the entry points as the roots.
+  // Process each of the entry points as a root.
   std::queue<uint32_t> roots;
   for (auto& e : module->entry_points()) {
-    // TODO(greg-lunarg): Handle all stages. In particular, we will need
+    // TODO(greg-lunarg): Handle all stages. Currently only handling
+    // fragment shaders. In particular, we will need
     // to clone any functions which are in the call trees of entrypoints
     // with differing execution models.
     if (e.GetSingleWordInOperand(kEntryPointExecutionModelInIdx) != 
@@ -1142,7 +1181,22 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
       continue;
     roots.push(e.GetSingleWordInOperand(kEntryPointFunctionIdInIdx));
   }
-  return InstProcessCallTreeFromRoots(pfn, id2function, &roots, SpvExecutionModelFragment);
+  bool modified = InstProcessCallTreeFromRoots(pfn, id2function, &roots,
+      SpvExecutionModelFragment);
+  // If any function is modified, add FragCoord to all entry points that
+  // don't have it.
+  if (modified) {
+    uint32_t ocnt = 0;
+    for (auto& e : module->entry_points()) {
+      bool found = false;
+      e.ForEachInOperand([&ocnt,&found,this](const uint32_t* idp){
+        if (ocnt < kEntryPointInterfaceInIdx) return;
+        if (*idp == this->GetFragCoordId()) found = true;
+      });
+      if (!found) e.AddOperand({ SPV_OPERAND_TYPE_ID, {GetFragCoordId()} });
+    }
+  }
+  return modified;
 }
 
 void InstrumentPass::InitializeInstrument(uint32_t validation_id) {

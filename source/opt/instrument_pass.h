@@ -146,6 +146,8 @@ class InstrumentPass : public Pass {
   void AddSelectionMerge(
     uint32_t mergeBlockId, uint32_t selectionControl,
     std::unique_ptr<BasicBlock>* block_ptr);
+
+  uint32_t FindBuiltin(uint32_t builtin_val);
   
   void AddDecoration(uint32_t inst_id, uint32_t decoration,
     uint32_t decoration_value);

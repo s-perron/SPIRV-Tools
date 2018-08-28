@@ -193,6 +193,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
     GenDebugOutputCode(function_idx, instruction_idx,
         stage_idx, { indexId, lengthId }, new_blocks, &new_blk_ptr);
+    // Remember last invalid block id
+    uint32_t lastInvalidBlkId = new_blk_ptr->GetLabelInst()->result_id();
     // Gen zero for invalid  reference
     uint32_t ref_type_id = ref_inst_itr->type_id();
     uint32_t nullId = GetNullId(ref_type_id);
@@ -205,7 +207,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     // its id.
     context()->KillInst(&*ref_inst_itr);
     AddPhi(ref_type_id, ref_result_id, newRefId, validBlkId,
-        nullId, invalidBlkId, &new_blk_ptr);
+        nullId, lastInvalidBlkId, &new_blk_ptr);
     // Move remainder of original block instructions into merge block
     MovePostludeCode(ref_block_itr, &new_blk_ptr);
   }
