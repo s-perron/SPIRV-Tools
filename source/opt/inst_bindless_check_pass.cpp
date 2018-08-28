@@ -182,9 +182,10 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
         assert(false && "unexpected reference opcode");
         break;
     }
-    // Register new reference
+    // Register new reference and add to new block
     uint32_t ref_result_id = ref_inst_itr->result_id();
     get_def_use_mgr()->AnalyzeInstDefUse(&*newRefInst);
+    new_blk_ptr->AddInstruction(std::move(newRefInst));
     get_decoration_mgr()->CloneDecorations(ref_result_id, newRefId);
     // Close valid block and gen invalid block
     AddBranch(mergeBlkId, &new_blk_ptr);
