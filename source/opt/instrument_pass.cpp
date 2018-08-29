@@ -32,9 +32,7 @@ static const int kInstCommonOutStageIdx = 4;
 // Frag Shader Output Record Offsets
 static const int kInstFragOutFragCoordX = 5;
 static const int kInstFragOutFragCoordY = 6;
-static const int kInstFragOutFragCoordZ = 7;
-static const int kInstFragOutFragCoordW = 8;
-static const int kInstFragOutRecordSize = 9;
+static const int kInstFragOutRecordSize = 7;
 
 // Indices of operands in SPIR-V instructions
 static const int kSpvFunctionCallFunctionId = 2;
@@ -352,7 +350,7 @@ void InstrumentPass::GenFragDebugOutputCode(
   uint32_t uint_frag_coord_id = TakeNextId();
   AddUnaryOp(GetVec4UintId(), uint_frag_coord_id, SpvOpBitcast, frag_coord_id,
       new_blk_ptr);
-  for (uint32_t u = 0; u < 4u; ++u)
+  for (uint32_t u = 0; u < 2u; ++u)
     GenFragCoordEltDebugOutputCode(base_offset_id,  uint_frag_coord_id, u,
         new_blk_ptr);
 }
