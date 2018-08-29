@@ -354,9 +354,10 @@ void InstrumentPass::GenFragDebugOutputCode(
         new_blk_ptr);
 }
 
-uint32_t InstrumentPass::GetStageOutputRecordSize() {
+uint32_t InstrumentPass::GetStageOutputRecordSize(uint32_t stage_idx) {
   // TODO(greg-lunarg): Add support for all stages
   // TODO(greg-lunarg): Assert fragment shader
+  assert(stage_idx == SpvExecutionModelFragment && "unexpected stage");
   return kInstFragOutRecordSize;
 }
 
@@ -368,7 +369,7 @@ void InstrumentPass::GenDebugOutputCode(
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
   // Gen test if debug output buffer size will not be exceeded.
-  uint32_t obuf_record_sz = GetStageOutputRecordSize() +
+  uint32_t obuf_record_sz = GetStageOutputRecordSize(stage_idx) +
       static_cast<uint32_t>(validation_data.size());
   uint32_t obuf_curr_sz_ac_id = TakeNextId();
   AddBinaryOp(GetOutputBufferUintPtrId(), obuf_curr_sz_ac_id, SpvOpAccessChain,

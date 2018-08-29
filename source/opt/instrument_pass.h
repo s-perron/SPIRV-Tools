@@ -101,7 +101,7 @@ class InstrumentPass : public Pass {
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Return size of common and stage-specific output record members
-  uint32_t GetStageOutputRecordSize();
+  uint32_t GetStageOutputRecordSize(uint32_t stage_idx);
 
   // Generate instructions which will write a record to the end of the debug
   // output buffer for the current shader.
