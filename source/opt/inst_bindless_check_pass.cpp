@@ -293,7 +293,7 @@ Pass::Status InstBindlessCheckPass::ProcessImpl() {
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
 
-InstBindlessCheckPass::InstBindlessCheckPass() = default;
+// InstBindlessCheckPass::InstBindlessCheckPass() = default;
 
 Pass::Status InstBindlessCheckPass::Process() {
   InitializeInstBindlessCheck();

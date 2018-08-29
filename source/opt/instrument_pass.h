@@ -49,7 +49,8 @@ class InstrumentPass : public Pass {
   virtual ~InstrumentPass() = default;
 
  protected:
-  InstrumentPass();
+  InstrumentPass(uint32_t desc_set, uint32_t shader_id) :
+    desc_set_(desc_set), shader_id_(shader_id) {}
 
   // Move all code in |ref_block_itr| preceding the instruction |ref_inst_itr|
   // to be instrumented into block |new_blk_ptr|.
@@ -236,6 +237,12 @@ class InstrumentPass : public Pass {
 
   // Initialize state for optimization of module
   void InitializeInstrument(uint32_t validation_id);
+
+  // Debug descriptor set index
+  uint32_t desc_set_;
+
+  // Shader module ID written into output record
+  uint32_t shader_id_;
 
   // Map from function id to function pointer.
   std::unordered_map<uint32_t, Function*> id2function_;

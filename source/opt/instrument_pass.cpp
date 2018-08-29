@@ -316,7 +316,7 @@ void InstrumentPass::GenCommonDebugOutputCode(
   // Store Shader Id
   // TODO(greg-lunarg): Get shader id from command argument
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutShaderId,
-      GetUintConstantId(23), new_blk_ptr);
+      GetUintConstantId(shader_id_), new_blk_ptr);
   // Store Function Idx
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutFunctionIdx,
       GetUintConstantId(func_idx), new_blk_ptr);
@@ -532,7 +532,7 @@ uint32_t InstrumentPass::GetOutputBufferId() {
     get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
     get_module()->AddGlobalValue(std::move(newVarOp));
     // TODO(greg-lunarg): Get debug descriptor set from command argument
-    AddDecoration(output_buffer_id_, SpvDecorationDescriptorSet, 7);
+    AddDecoration(output_buffer_id_, SpvDecorationDescriptorSet, desc_set_);
     AddDecoration(output_buffer_id_, SpvDecorationBinding,
         GetOutputBufferBinding());
   }
@@ -656,7 +656,7 @@ void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
   }
 }
 
-InstrumentPass::InstrumentPass() {}
+//InstrumentPass::InstrumentPass() {}
 
 }  // namespace opt
 }  // namespace spvtools

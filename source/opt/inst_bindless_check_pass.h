@@ -33,7 +33,9 @@ namespace opt {
 // See optimizer.hpp for documentation.
 class InstBindlessCheckPass : public InstrumentPass {
  public:
-  InstBindlessCheckPass();
+   InstBindlessCheckPass(uint32_t desc_set, uint32_t shader_id)
+     : InstrumentPass(desc_set, shader_id) {}
+
   Status Process() override;
 
   const char* name() const override { return "inline-entry-points-exhaustive"; }
