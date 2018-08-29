@@ -226,7 +226,8 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
   }
   std::vector<std::unique_ptr<BasicBlock>> newBlocks;
   std::vector<std::unique_ptr<Instruction>> newVars;
-  uint32_t instruction_idx = 0;
+  // Count function instruction
+  uint32_t instruction_idx = 1;
   // Using block iterators here because of block erasures and insertions.
   for (auto bi = func->begin(); bi != func->end(); ++bi) {
     // Count block's label
@@ -258,8 +259,11 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
       if (newVars.size() > 0)
         func->begin()->begin().InsertBefore(std::move(newVars));
       modified = true;
-      // Restart instrumenting at beginning of last new block.
+      // Restart instrumenting at beginning of last new block,
+      // but skip over new phi function.
       ii = bi->begin();
+      assert((ii->opcode() == SpvOpPhi) && "expected phi");
+      ++ii;
       newBlocks.clear();
       newVars.clear();
     }
