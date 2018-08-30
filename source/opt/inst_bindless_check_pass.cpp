@@ -191,8 +191,9 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
+    uint32_t error_id = GetUintConstantId(kInstErrorBindlessImageBounds);
     GenDebugOutputCode(function_idx, instruction_idx,
-        stage_idx, { indexId, lengthId }, new_blocks, &new_blk_ptr);
+        stage_idx, { error_id, indexId, lengthId }, new_blocks, &new_blk_ptr);
     // Remember last invalid block id
     uint32_t lastInvalidBlkId = new_blk_ptr->GetLabelInst()->result_id();
     // Gen zero for invalid  reference

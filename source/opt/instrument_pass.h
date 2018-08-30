@@ -29,9 +29,15 @@
 // Validation Ids
 static const int kInstValidationIdBindless = 0;
 
+// Error Codes
+static const uint32_t kInstErrorBindlessImageBounds = 0;
+static const uint32_t kInstErrorBindlessSamplerBounds = 1;
+static const uint32_t kInstErrorBindlessImageUninitialized = 2;
+static const uint32_t kInstErrorBindlessSamplerUninitialized = 3;
+
 // Debug Buffer Bindings
-static const int kDebugOutputBindingBindless = 0;
-static const int kDebugInputBindingBindless = 1;
+static const uint32_t kDebugOutputBindingBindless = 0;
+static const uint32_t kDebugInputBindingBindless = 1;
 
 namespace spvtools {
 namespace opt {
