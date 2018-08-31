@@ -646,6 +646,7 @@ void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
   v4uint_id_ = 0;
 
   // clear collections
+  id2function_.clear();
   id2block_.clear();
 
   for (auto& fn : *get_module()) {
