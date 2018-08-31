@@ -105,32 +105,26 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     return;
   // If index and bound both compile-time constants and index >= bound,
   // generate debug output error code and use zero as referenced value.
+  uint32_t error_id = GetUintConstantId(kInstErrorBindlessImageBounds);
   uint32_t lengthId =
     ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
   Instruction* lengthInst = get_def_use_mgr()->GetDef(lengthId);
   if (indexInst->opcode() == SpvOpConstant &&
       lengthInst->opcode() == SpvOpConstant) {
-    if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) >=
-        lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx)) {
-      MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-      GenDebugOutputCode(function_idx, instruction_idx,
-          stage_idx, { 0, 0 }, new_blocks, &new_blk_ptr);
-      // Set the original reference id to zero. Kill original reference
-      // before reusing id.
-      uint32_t ref_type_id = ref_inst_itr->type_id();
-      uint32_t ref_result_id = ref_inst_itr->result_id();
-      uint32_t nullId = GetNullId(ref_type_id);
-      context()->KillInst(&*ref_inst_itr);
-      AddUnaryOp(ref_type_id, ref_result_id, SpvOpCopyObject,
-          nullId, &new_blk_ptr);
-      // Close error block and create and populate remainder block
-      uint32_t remBlkId = TakeNextId();
-      std::unique_ptr<Instruction> remLabel(NewLabel(remBlkId));
-      AddBranch(remBlkId, &new_blk_ptr);
-      new_blocks->push_back(std::move(new_blk_ptr));
-      new_blk_ptr.reset(new BasicBlock(std::move(remLabel)));
-      MovePostludeCode(ref_block_itr, &new_blk_ptr);
-    }
+    if (indexInst->GetSingleWordInOperand(kSpvConstantValueInIdx) <
+        lengthInst->GetSingleWordInOperand(kSpvConstantValueInIdx))
+      return;
+    MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
+    GenDebugOutputCode(function_idx, instruction_idx,
+        stage_idx, { error_id, indexId, lengthId }, new_blocks, &new_blk_ptr);
+    // Set the original reference id to zero. Kill original reference
+    // before reusing id.
+    uint32_t ref_type_id = ref_inst_itr->type_id();
+    uint32_t ref_result_id = ref_inst_itr->result_id();
+    uint32_t nullId = GetNullId(ref_type_id);
+    context()->KillInst(&*ref_inst_itr);
+    AddUnaryOp(ref_type_id, ref_result_id, SpvOpCopyObject,
+        nullId, &new_blk_ptr);
   }
   // Otherwise generate full runtime bounds test code with true branch
   // being full reference and false branch being debug output and zero
@@ -191,7 +185,6 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
-    uint32_t error_id = GetUintConstantId(kInstErrorBindlessImageBounds);
     GenDebugOutputCode(function_idx, instruction_idx,
         stage_idx, { error_id, indexId, lengthId }, new_blocks, &new_blk_ptr);
     // Remember last invalid block id
@@ -209,9 +202,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     context()->KillInst(&*ref_inst_itr);
     AddPhi(ref_type_id, ref_result_id, newRefId, validBlkId,
         nullId, lastInvalidBlkId, &new_blk_ptr);
-    // Move remainder of original block instructions into merge block
-    MovePostludeCode(ref_block_itr, &new_blk_ptr);
   }
+  MovePostludeCode(ref_block_itr, &new_blk_ptr);
   // Add remainder/merge block to new blocks
   new_blocks->push_back(std::move(new_blk_ptr));
 }
@@ -261,9 +253,11 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
         func->begin()->begin().InsertBefore(std::move(newVars));
       modified = true;
       // Restart instrumenting at beginning of last new block,
-      // but skip over any new phi function.
+      // but skip over new phi or copy instruction.
       ii = bi->begin();
-      while (ii->opcode() == SpvOpPhi) ++ii;
+      assert((ii->opcode() == SpvOpPhi || ii->opcode() == SpvOpCopyObject) &&
+          "unexpected instruction at end of instrumentation");
+      ++ii;
       newBlocks.clear();
       newVars.clear();
     }
