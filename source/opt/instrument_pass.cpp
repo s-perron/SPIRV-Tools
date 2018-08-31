@@ -626,8 +626,10 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
     for (auto& e : module->entry_points()) {
       bool found = false;
       e.ForEachInOperand([&ocnt,&found,this](const uint32_t* idp){
-        if (ocnt < kEntryPointInterfaceInIdx) return;
-        if (*idp == this->GetFragCoordId()) found = true;
+        if (ocnt >= kEntryPointInterfaceInIdx) {
+          if (*idp == this->GetFragCoordId()) found = true;
+        }
+        ++ocnt;
       });
       if (!found) e.AddOperand({ SPV_OPERAND_TYPE_ID, {GetFragCoordId()} });
     }
