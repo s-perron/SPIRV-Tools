@@ -261,10 +261,9 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
         func->begin()->begin().InsertBefore(std::move(newVars));
       modified = true;
       // Restart instrumenting at beginning of last new block,
-      // but skip over new phi function.
+      // but skip over any new phi function.
       ii = bi->begin();
-      assert((ii->opcode() == SpvOpPhi) && "expected phi");
-      ++ii;
+      while (ii->opcode() == SpvOpPhi) ++ii;
       newBlocks.clear();
       newVars.clear();
     }
