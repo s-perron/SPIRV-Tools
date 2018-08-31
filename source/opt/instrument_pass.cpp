@@ -609,7 +609,11 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
   std::queue<uint32_t> roots;
   for (auto& e : module->entry_points()) {
     // TODO(greg-lunarg): Handle all stages. Currently only handling
-    // fragment shaders. In particular, we will need
+    // fragment shaders.
+    // TODO(greg-lunarg): Handle mixed stages. Technically, a shader module
+    // can contain entry points with different execution models, although
+    // such modules will likely be rare as GLSL and HLSL are geared toward
+    // one model per module. In such cases we will need
     // to clone any functions which are in the call trees of entrypoints
     // with differing execution models.
     if (e.GetSingleWordInOperand(kEntryPointExecutionModelInIdx) != 
