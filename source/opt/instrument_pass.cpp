@@ -16,7 +16,7 @@
 
 #include "instrument_pass.h"
 
-#include "cfa.h"
+#include "source/cfa.h"
 
 // Debug Buffer Offsets
 static const int kDebugOutputSizeOffset = 0;
