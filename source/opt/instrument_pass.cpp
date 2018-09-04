@@ -181,9 +181,10 @@ uint32_t InstrumentPass::FindBuiltin(uint32_t builtin_val) {
       if (a.GetSingleWordInOperand(kSpvDecorateBuiltinInIdx) != builtin_val)
         continue;
       uint32_t target_id = a.GetSingleWordInOperand(kSpvDecorateTargetIdInIdx);
-      Instruction* b_var = context()->get_def_use_mgr()->GetDef(target_id);
       // TODO(greg-lunarg): Support group builtins
-      assert(b_var->opcode() == SpvOpVariable && "unexpected group builtin");
+      Instruction* b_var = context()->get_def_use_mgr()->GetDef(target_id);
+      if (b_var->opcode() != SpvOpVariable)
+        assert(false && "unexpected group builtin");
       return target_id;
     }
     else if (a.opcode() == SpvOpMemberDecorate) {
