@@ -40,7 +40,6 @@ namespace opt {
 
 void InstBindlessCheckPass::GenBindlessCheckCode(
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-    std::vector<std::unique_ptr<Instruction>>* new_vars,
     BasicBlock::iterator ref_inst_itr,
     UptrVectorIterator<BasicBlock> ref_block_itr,
     uint32_t function_idx,
@@ -218,7 +217,6 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
     ++function_idx;
   }
   std::vector<std::unique_ptr<BasicBlock>> newBlocks;
-  std::vector<std::unique_ptr<Instruction>> newVars;
   // Count function instruction
   uint32_t instruction_idx = 1;
   // Using block iterators here because of block erasures and insertions.
@@ -229,7 +227,7 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
       // Bump instruction count if debug instructions
       instruction_idx += static_cast<uint32_t>(ii->dbg_line_insts().size());
       // Generate bindless check if warranted
-      GenBindlessCheckCode(&newBlocks, &newVars, ii, bi, function_idx,
+      GenBindlessCheckCode(&newBlocks, ii, bi, function_idx,
           instruction_idx, stage_idx);
       if (newBlocks.size() == 0) {
         ++ii;
@@ -248,9 +246,6 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
       bi = bi.InsertBefore(&newBlocks);
       // Reset block iterator to last new block
       for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
-      // Insert new function variables.
-      if (newVars.size() > 0)
-        func->begin()->begin().InsertBefore(std::move(newVars));
       modified = true;
       // Restart instrumenting at beginning of last new block,
       // but skip over new phi or copy instruction.
@@ -259,7 +254,6 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
           "unexpected instruction at end of instrumentation");
       ++ii;
       newBlocks.clear();
-      newVars.clear();
     }
   }
   return modified;
