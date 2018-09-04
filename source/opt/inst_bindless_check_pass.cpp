@@ -132,7 +132,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   else {
     MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
     uint32_t ultId = TakeNextId();
-    AddBinaryOp(GetTypeId(&analysis::Bool()), ultId, SpvOpULessThan, indexId,
+    AddBinaryOp(GetBoolId(), ultId, SpvOpULessThan, indexId,
         lengthId, &new_blk_ptr);
     uint32_t mergeBlkId = TakeNextId();
     uint32_t validBlkId = TakeNextId();

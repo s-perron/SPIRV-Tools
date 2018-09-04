@@ -164,7 +164,7 @@ void InstrumentPass::AddArrayLength(uint32_t result_id,
     std::unique_ptr<BasicBlock>* block_ptr) {
   std::unique_ptr<Instruction> newALenOp(
       new Instruction(context(), SpvOpArrayLength,
-          GetTypeId(&analysis::Integer(32, false)), result_id,
+          GetUintId(), result_id,
           { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ struct_ptr_id } },
             { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER, {
               member_idx } } }));
@@ -281,9 +281,9 @@ uint32_t InstrumentPass::GetNullId(uint32_t type_id) {
 uint32_t InstrumentPass::GetUintConstantId(uint32_t u) {
   analysis::TypeManager* type_mgr = context()->get_type_mgr();
   analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
-  analysis::Type* uint_ty = type_mgr->GetRegisteredType(
-      &analysis::Integer(32, false));
-  const analysis::Constant* uint_const = const_mgr->GetConstant(uint_ty, {u});
+  analysis::Integer uint_ty(32, false);
+  analysis::Type* reg_uint_ty = type_mgr->GetRegisteredType(&uint_ty);
+  const analysis::Constant* uint_const = const_mgr->GetConstant(reg_uint_ty, {u});
   Instruction* uint_inst = const_mgr->GetDefiningInstruction(uint_const);
   return uint_inst->result_id();
 }
@@ -294,7 +294,7 @@ void InstrumentPass::GenDebugOutputFieldCode(
     uint32_t field_value_id,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
   uint32_t data_idx_id = TakeNextId();
-  AddBinaryOp(GetTypeId(&analysis::Integer(32, false)), data_idx_id, SpvOpIAdd,
+  AddBinaryOp(GetUintId(), data_idx_id, SpvOpIAdd,
       base_offset_id, GetUintConstantId(field_offset), new_blk_ptr);
   uint32_t achain_id = TakeNextId();
   AddTernaryOp(GetOutputBufferUintPtrId(), achain_id, SpvOpAccessChain,
@@ -333,7 +333,7 @@ void InstrumentPass::GenFragCoordEltDebugOutputCode(
     uint32_t element,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
   uint32_t element_val_id = TakeNextId();
-  AddExtractOp(GetTypeId(&analysis::Integer(32, false)), element_val_id,
+  AddExtractOp(GetUintId(), element_val_id,
       uint_frag_coord_id, element, new_blk_ptr);
   GenDebugOutputFieldCode(base_offset_id, kInstFragOutFragCoordX + element,
       element_val_id, new_blk_ptr);
@@ -378,7 +378,7 @@ void InstrumentPass::GenDebugOutputCode(
   // Fetch the current debug buffer written size atomically, adding the
   // size of the record to be written.
   uint32_t obuf_curr_sz_id = TakeNextId();
-  AddQuadOp(GetTypeId(&analysis::Integer(32, false)), obuf_curr_sz_id,
+  AddQuadOp(GetUintId(), obuf_curr_sz_id,
       SpvOpAtomicIAdd,
       obuf_curr_sz_ac_id,
       GetUintConstantId(SpvScopeInvocation),
@@ -387,7 +387,7 @@ void InstrumentPass::GenDebugOutputCode(
       new_blk_ptr);
   // Compute new written size
   uint32_t obuf_new_sz_id = TakeNextId();
-  AddBinaryOp(GetTypeId(&analysis::Integer(32, false)), obuf_new_sz_id,
+  AddBinaryOp(GetUintId(), obuf_new_sz_id,
       SpvOpIAdd,
       obuf_curr_sz_id, GetUintConstantId(obuf_record_sz),
       new_blk_ptr);
@@ -400,7 +400,7 @@ void InstrumentPass::GenDebugOutputCode(
   // Test that new written size is less than or equal to debug output
   // data bound
   uint32_t obuf_safe_id = TakeNextId();
-  AddBinaryOp(GetTypeId(&analysis::Bool()), obuf_safe_id,
+  AddBinaryOp(GetBoolId(), obuf_safe_id,
       SpvOpULessThanEqual, obuf_new_sz_id, obuf_bnd_id,
       new_blk_ptr);
   uint32_t mergeBlkId = TakeNextId();
@@ -488,16 +488,11 @@ void InstrumentPass::UpdateSucceedingPhis(
       });
 }
 
-// Return id for uint type
-uint32_t InstrumentPass::GetTypeId(analysis::Type* ty_ptr) {
-  return context()->get_type_mgr()->GetTypeInstruction(ty_ptr);
-}
-
 // Return id for output buffer uint ptr type
 uint32_t InstrumentPass::GetOutputBufferUintPtrId() {
   if (output_buffer_uint_ptr_id_ == 0) {
     output_buffer_uint_ptr_id_ = context()->get_type_mgr()->FindPointerToType(
-        GetTypeId(&analysis::Integer(32, false)), SpvStorageClassStorageBuffer);
+        GetUintId(), SpvStorageClassStorageBuffer);
   }
   return output_buffer_uint_ptr_id_;
 }
@@ -514,13 +509,14 @@ uint32_t InstrumentPass::GetOutputBufferBinding() {
 uint32_t InstrumentPass::GetOutputBufferId() {
   if (output_buffer_id_ == 0) {
     analysis::TypeManager* type_mgr = context()->get_type_mgr();
-    analysis::Type* uint_ty = type_mgr->GetRegisteredType(
-        &analysis::Integer(32, false));
-    analysis::Type* uint_rarr_ty = type_mgr->GetRegisteredType(
-        &analysis::RuntimeArray(uint_ty));
-    analysis::Type* obuf_ty = type_mgr->GetRegisteredType(
-        &analysis::Struct({ uint_ty, uint_rarr_ty }));
-    uint32_t obufTyId = type_mgr->GetTypeInstruction(obuf_ty);
+    analysis::Integer uint_ty(32, false);
+    analysis::Type* reg_uint_ty = type_mgr->GetRegisteredType(&uint_ty);
+    analysis::RuntimeArray uint_rarr_ty(reg_uint_ty);
+    analysis::Type* reg_uint_rarr_ty = type_mgr->GetRegisteredType(
+        &uint_rarr_ty);
+    analysis::Struct obuf_ty({ reg_uint_ty, reg_uint_rarr_ty });
+    analysis::Type* reg_obuf_ty = type_mgr->GetRegisteredType(&obuf_ty);
+    uint32_t obufTyId = type_mgr->GetTypeInstruction(reg_obuf_ty);
     uint32_t obufTyPtrId_ = type_mgr->FindPointerToType(obufTyId,
         SpvStorageClassStorageBuffer);
     output_buffer_id_ = TakeNextId();
@@ -541,25 +537,45 @@ uint32_t InstrumentPass::GetOutputBufferId() {
 uint32_t InstrumentPass::GetVec4FloatId() {
   if (v4float_id_ == 0) {
     analysis::TypeManager* type_mgr = context()->get_type_mgr();
-    analysis::Type* float_ty = type_mgr->GetRegisteredType(
-        &analysis::Float(32));
-    analysis::Type* v4float_ty = type_mgr->GetRegisteredType(
-        &analysis::Vector(float_ty, 4));
-    v4float_id_ = type_mgr->GetTypeInstruction(v4float_ty);
+    analysis::Float float_ty(32);
+    analysis::Type* reg_float_ty = type_mgr->GetRegisteredType(&float_ty);
+    analysis::Vector v4float_ty(reg_float_ty, 4);
+    analysis::Type* reg_v4float_ty = type_mgr->GetRegisteredType(&v4float_ty);
+    v4float_id_ = type_mgr->GetTypeInstruction(reg_v4float_ty);
   }
   return v4float_id_;
+}
+
+uint32_t InstrumentPass::GetUintId() {
+  if (uint_id_ == 0) {
+    analysis::TypeManager* type_mgr = context()->get_type_mgr();
+    analysis::Integer uint_ty(32, false);
+    analysis::Type* reg_uint_ty = type_mgr->GetRegisteredType(&uint_ty);
+    uint_id_ = type_mgr->GetTypeInstruction(reg_uint_ty);
+  }
+  return uint_id_;
 }
 
 uint32_t InstrumentPass::GetVec4UintId() {
   if (v4uint_id_ == 0) {
     analysis::TypeManager* type_mgr = context()->get_type_mgr();
-    analysis::Type* uint_ty = type_mgr->GetRegisteredType(
-        &analysis::Integer(32, false));
-    analysis::Type* v4uint_ty = type_mgr->GetRegisteredType(
-        &analysis::Vector(uint_ty, 4));
-    v4uint_id_ = type_mgr->GetTypeInstruction(v4uint_ty);
+    analysis::Integer uint_ty(32, false);
+    analysis::Type* reg_uint_ty = type_mgr->GetRegisteredType(&uint_ty);
+    analysis::Vector v4uint_ty(reg_uint_ty, 4);
+    analysis::Type* reg_v4uint_ty = type_mgr->GetRegisteredType(&v4uint_ty);
+    v4uint_id_ = type_mgr->GetTypeInstruction(reg_v4uint_ty);
   }
   return v4uint_id_;
+}
+
+uint32_t InstrumentPass::GetBoolId() {
+  if (bool_id_ == 0) {
+    analysis::TypeManager* type_mgr = context()->get_type_mgr();
+    analysis::Bool bool_ty;
+    analysis::Type* reg_bool_ty = type_mgr->GetRegisteredType(&bool_ty);
+    bool_id_ = type_mgr->GetTypeInstruction(reg_bool_ty);
+  }
+  return bool_id_;
 }
 
 uint32_t InstrumentPass::GetFragCoordId() {
@@ -647,7 +663,9 @@ void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
   output_buffer_uint_ptr_id_ = 0;
   frag_coord_id_ = 0;
   v4float_id_ = 0;
+  uint_id_ = 0;
   v4uint_id_ = 0;
+  bool_id_ = 0;
 
   // clear collections
   id2function_.clear();

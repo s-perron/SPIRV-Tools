@@ -207,8 +207,11 @@ class InstrumentPass : public Pass {
   void UpdateSucceedingPhis(
       std::vector<std::unique_ptr<BasicBlock>>& new_blocks);
 
-  // Return id for |ty_ptr|
-  uint32_t GetTypeId(analysis::Type* ty_ptr);
+  // Return id for 32-bit unsigned type
+  uint32_t GetUintId();
+
+  // Return id for 32-bit unsigned type
+  uint32_t GetBoolId();
 
   // Return id for output buffer uint type
   uint32_t GetOutputBufferUintPtrId();
@@ -272,8 +275,14 @@ class InstrumentPass : public Pass {
   // id for v4float type
   uint32_t v4float_id_;
 
-  // id for v4uint type
+  // id for v4float type
   uint32_t v4uint_id_;
+
+  // id for 32-bit unsigned type
+  uint32_t uint_id_;
+
+  // id for bool type
+  uint32_t bool_id_;
 
   // Pre-instrumentation same-block insts
   std::unordered_map<uint32_t, Instruction*> preCallSB_;
