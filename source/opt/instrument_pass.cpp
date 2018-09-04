@@ -358,7 +358,8 @@ void InstrumentPass::GenFragDebugOutputCode(
 uint32_t InstrumentPass::GetStageOutputRecordSize(uint32_t stage_idx) {
   // TODO(greg-lunarg): Add support for all stages
   // TODO(greg-lunarg): Assert fragment shader
-  assert(stage_idx == SpvExecutionModelFragment && "unexpected stage");
+  if (stage_idx != SpvExecutionModelFragment)
+    assert(false && "unexpected stage");
   return kInstFragOutRecordSize;
 }
 
