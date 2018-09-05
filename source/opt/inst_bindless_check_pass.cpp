@@ -52,6 +52,25 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     // TODO(greg-lunarg): Add all other descriptor-based references
     case SpvOp::SpvOpImageSampleImplicitLod:
     case SpvOp::SpvOpImageSampleExplicitLod:
+    case SpvOp::SpvOpImageSampleDrefImplicitLod:
+    case SpvOp::SpvOpImageSampleDrefExplicitLod:
+    case SpvOp::SpvOpImageSampleProjImplicitLod:
+    case SpvOp::SpvOpImageSampleProjExplicitLod:
+    case SpvOp::SpvOpImageSampleProjDrefImplicitLod:
+    case SpvOp::SpvOpImageSampleProjDrefExplicitLod:
+    case SpvOp::SpvOpImageGather:
+    case SpvOp::SpvOpImageDrefGather:
+    case SpvOp::SpvOpImageQueryLod:
+    case SpvOp::SpvOpImageSparseSampleImplicitLod:
+    case SpvOp::SpvOpImageSparseSampleExplicitLod:
+    case SpvOp::SpvOpImageSparseSampleDrefImplicitLod:
+    case SpvOp::SpvOpImageSparseSampleDrefExplicitLod:
+    case SpvOp::SpvOpImageSparseSampleProjImplicitLod:
+    case SpvOp::SpvOpImageSparseSampleProjExplicitLod:
+    case SpvOp::SpvOpImageSparseSampleProjDrefImplicitLod:
+    case SpvOp::SpvOpImageSparseSampleProjDrefExplicitLod:
+    case SpvOp::SpvOpImageSparseGather:
+    case SpvOp::SpvOpImageSparseDrefGather:
       sampledImageId =
           ref_inst_itr->GetSingleWordInOperand(kSpvImageSampleImageIdInIdx);
       break;
