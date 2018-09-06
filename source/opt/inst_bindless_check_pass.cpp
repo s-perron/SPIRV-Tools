@@ -16,9 +16,6 @@
 
 #include "inst_bindless_check_pass.h"
 
-// Operand indices
-static const int kSpvImageSampleImageIdIdx = 2;
-
 // Input Operand Indices
 static const int kSpvImageSampleImageIdInIdx = 0;
 static const int kSpvSampledImageImageIdInIdx = 0;
@@ -212,7 +209,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
       newRefId = TakeNextId();
       newRefInst->SetResultId(newRefId);
     }
-    newRefInst->SetOperand(kSpvImageSampleImageIdIdx, { newImageId });
+    newRefInst->SetInOperand(kSpvImageSampleImageIdInIdx, { newImageId });
     // Register new reference and add to new block
     get_def_use_mgr()->AnalyzeInstDefUse(&*newRefInst);
     new_blk_ptr->AddInstruction(std::move(newRefInst));
