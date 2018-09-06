@@ -623,20 +623,28 @@ bool InstrumentPass::InstProcessCallTreeFromRoots(
 bool InstrumentPass::InstProcessEntryPointCallTree(
     InstProcessFunction& pfn,
     Module* module) {
-  // Process each of the entry points as a root.
+  // Make sure all entry points have the same execution model.
+  // TODO(greg-lunarg): Handle mixed stages. Technically, a shader module
+  // can contain entry points with different execution models, although
+  // such modules will likely be rare as GLSL and HLSL are geared toward
+  // one model per module. In such cases we will need
+  // to clone any functions which are in the call trees of entrypoints
+  // with differing execution models.
+  uint32_t ecnt = 0;
+  uint32_t eStage;
+  for (auto& e : module->entry_points()) {
+    if (ecnt == 0)
+      eStage = e.GetSingleWordInOperand(kEntryPointExecutionModelInIdx);
+    else if (e.GetSingleWordInOperand(kEntryPointExecutionModelInIdx) != eStage)
+      return false;
+  }
+  // Only supporting fragment shaders at the moment.
+  // TODO(greg-lunarg): Handle all stages.
+  if (eStage != SpvExecutionModelFragment)
+    return false;
+  // Add together the roots of all entry points
   std::queue<uint32_t> roots;
   for (auto& e : module->entry_points()) {
-    // TODO(greg-lunarg): Handle all stages. Currently only handling
-    // fragment shaders.
-    // TODO(greg-lunarg): Handle mixed stages. Technically, a shader module
-    // can contain entry points with different execution models, although
-    // such modules will likely be rare as GLSL and HLSL are geared toward
-    // one model per module. In such cases we will need
-    // to clone any functions which are in the call trees of entrypoints
-    // with differing execution models.
-    if (e.GetSingleWordInOperand(kEntryPointExecutionModelInIdx) != 
-        SpvExecutionModelFragment)
-      continue;
     roots.push(e.GetSingleWordInOperand(kEntryPointFunctionIdInIdx));
   }
   bool modified = InstProcessCallTreeFromRoots(pfn, &roots,
