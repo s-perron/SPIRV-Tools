@@ -29,6 +29,11 @@ static const int kInstCommonOutFunctionIdx = 2;
 static const int kInstCommonOutInstructionIdx = 3;
 static const int kInstCommonOutStageIdx = 4;
 
+// Vertex Shader Output Record Offsets
+static const int kInstVertOutVertexId = 5;
+static const int kInstVertOutInstanceId = 6;
+static const int kInstVertOutRecordSize = 7;
+
 // Frag Shader Output Record Offsets
 static const int kInstFragOutFragCoordX = 5;
 static const int kInstFragOutFragCoordY = 6;
@@ -357,10 +362,13 @@ void InstrumentPass::GenFragDebugOutputCode(
 
 uint32_t InstrumentPass::GetStageOutputRecordSize(uint32_t stage_idx) {
   // TODO(greg-lunarg): Add support for all stages
-  // TODO(greg-lunarg): Assert fragment shader
-  if (stage_idx != SpvExecutionModelFragment)
-    assert(false && "unexpected stage");
-  return kInstFragOutRecordSize;
+  uint32_t size = 0;
+  switch (stage_idx) {
+    case SpvExecutionModelVertex:   size = kInstVertOutRecordSize; break;
+    case SpvExecutionModelFragment: size = kInstFragOutRecordSize; break;
+    default: assert(false && "unexpected stage"); break;
+  }
+  return size;
 }
 
 void InstrumentPass::GenDebugOutputCode(
@@ -580,24 +588,29 @@ uint32_t InstrumentPass::GetBoolId() {
   return bool_id_;
 }
 
-uint32_t InstrumentPass::GetFragCoordId() {
+uint32_t InstrumentPass::GetBuiltinVarId(uint32_t builtin, uint32_t type_id,
+    uint32_t* var_id) {
   // If not yet known, look for one in shader
-  if (frag_coord_id_ == 0) frag_coord_id_ = FindBuiltin(SpvBuiltInFragCoord);
+  if (*var_id == 0) *var_id = FindBuiltin(builtin);
   // If none in shader, create one
-  if (frag_coord_id_ == 0) {
-    uint32_t fragCoordTyPtrId = context()->get_type_mgr()->FindPointerToType(
-      GetVec4FloatId(), SpvStorageClassInput);
-    frag_coord_id_ = TakeNextId();
+  if (*var_id == 0) {
+    uint32_t varTyPtrId = context()->get_type_mgr()->FindPointerToType(
+      type_id, SpvStorageClassInput);
+    *var_id = TakeNextId();
     std::unique_ptr<Instruction> newVarOp(
-      new Instruction(context(), SpvOpVariable, fragCoordTyPtrId,
-        frag_coord_id_,
+      new Instruction(context(), SpvOpVariable, varTyPtrId, *var_id,
         { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
           { SpvStorageClassInput } } }));
     get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
     get_module()->AddGlobalValue(std::move(newVarOp));
-    AddDecoration(frag_coord_id_, SpvDecorationBuiltIn, SpvBuiltInFragCoord);
+    AddDecoration(*var_id, SpvDecorationBuiltIn, builtin);
   }
-  return frag_coord_id_;
+  return *var_id;
+}
+
+uint32_t InstrumentPass::GetFragCoordId() {
+  return GetBuiltinVarId(SpvBuiltInFragCoord, GetVec4FloatId(),
+      &frag_coord_id_);
 }
 
 bool InstrumentPass::InstProcessCallTreeFromRoots(
@@ -623,7 +636,8 @@ bool InstrumentPass::InstProcessCallTreeFromRoots(
 bool InstrumentPass::InstProcessEntryPointCallTree(
     InstProcessFunction& pfn,
     Module* module) {
-  // Make sure all entry points have the same execution model.
+  // Make sure all entry points have the same execution model. Do not
+  // instrument if they do not.
   // TODO(greg-lunarg): Handle mixed stages. Technically, a shader module
   // can contain entry points with different execution models, although
   // such modules will likely be rare as GLSL and HLSL are geared toward
@@ -647,8 +661,7 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
   for (auto& e : module->entry_points()) {
     roots.push(e.GetSingleWordInOperand(kEntryPointFunctionIdInIdx));
   }
-  bool modified = InstProcessCallTreeFromRoots(pfn, &roots,
-      SpvExecutionModelFragment);
+  bool modified = InstProcessCallTreeFromRoots(pfn, &roots, eStage);
   // If any function is modified, add FragCoord to all entry points that
   // don't have it.
   if (modified) {
@@ -671,11 +684,14 @@ void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
   validation_id_ = validation_id;
   output_buffer_id_ = 0;
   output_buffer_uint_ptr_id_ = 0;
-  frag_coord_id_ = 0;
   v4float_id_ = 0;
   uint_id_ = 0;
   v4uint_id_ = 0;
   bool_id_ = 0;
+
+  vertex_id_ = 0;
+  instance_id_ = 0;
+  frag_coord_id_ = 0;
 
   // clear collections
   id2function_.clear();

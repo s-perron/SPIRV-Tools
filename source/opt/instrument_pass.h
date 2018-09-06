@@ -219,8 +219,12 @@ class InstrumentPass : public Pass {
   // Return binding for output buffer for current validation.
   uint32_t GetOutputBufferBinding();
 
-  // Return id for output buffer
+  // Return id for debug output buffer
   uint32_t GetOutputBufferId();
+
+  // Return id for variable with |builtin| decoration. Create if it
+  // doesn't exist.
+  uint32_t GetBuiltinVarId(uint32_t builtin, uint32_t type_id, uint32_t* var_id);
 
   // Return id for FragCoord variable
   uint32_t GetFragCoordId();
@@ -268,6 +272,12 @@ class InstrumentPass : public Pass {
 
   // type id for output buffer element
   uint32_t output_buffer_uint_ptr_id_;
+
+  // id for Vertex
+  uint32_t vertex_id_;
+
+  // id for Instance
+  uint32_t instance_id_;
 
   // id for FragCoord
   uint32_t frag_coord_id_;
