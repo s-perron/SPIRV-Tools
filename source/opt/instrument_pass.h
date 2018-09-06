@@ -100,6 +100,20 @@ class InstrumentPass : public Pass {
     uint32_t component,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
+  // Generate instructions into |new_blk_ptr| which will write the vertex-
+  // shader-specific members of the debug output buffer at |base_off|.
+  void GenBuiltinIdOutputCode(
+    uint32_t builtinId,
+    uint32_t builtinOff,
+    uint32_t base_off,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Generate instructions into |new_blk_ptr| which will write the vertex-
+  // shader-specific members of the debug output buffer at |base_off|.
+  void GenVertDebugOutputCode(
+    uint32_t base_off,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
   // Generate instructions into |new_blk_ptr| which will write the fragment-
   // shader-specific members of the debug output buffer at |base_off|.
   void GenFragDebugOutputCode(
@@ -226,6 +240,12 @@ class InstrumentPass : public Pass {
   // doesn't exist.
   uint32_t GetBuiltinVarId(uint32_t builtin, uint32_t type_id, uint32_t* var_id);
 
+  // Return id for VertexId variable
+  uint32_t GetVertexId();
+
+  // Return id for InstanceId variable
+  uint32_t GetInstanceId();
+
   // Return id for FragCoord variable
   uint32_t GetFragCoordId();
 
@@ -234,6 +254,9 @@ class InstrumentPass : public Pass {
 
   // Return id for v4uint type
   uint32_t GetVec4UintId();
+
+  // Add |var_id| to all entry points if not there.
+  void AddVarToEntryPoints(uint32_t var_id);
   
   // Call |pfn| on all functions in the call tree of the function
   // ids in |roots|. 

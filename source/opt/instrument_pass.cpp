@@ -345,6 +345,28 @@ void InstrumentPass::GenFragCoordEltDebugOutputCode(
       element_val_id, new_blk_ptr);
 }
 
+void InstrumentPass::GenBuiltinIdOutputCode(
+    uint32_t builtinId,
+    uint32_t builtinOff,
+    uint32_t base_offset_id,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  // Load and store builtin
+  uint32_t load_id = TakeNextId();
+  AddUnaryOp(GetUintId(), load_id, SpvOpLoad, builtinId, new_blk_ptr);
+  GenDebugOutputFieldCode(base_offset_id, builtinOff,
+    load_id, new_blk_ptr);
+}
+
+void InstrumentPass::GenVertDebugOutputCode(
+    uint32_t base_offset_id,
+    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  // Load and store VertexId and InstanceId
+  GenBuiltinIdOutputCode(GetVertexId(), kInstVertOutVertexId,
+      base_offset_id, new_blk_ptr);
+  GenBuiltinIdOutputCode(GetInstanceId(), kInstVertOutInstanceId,
+      base_offset_id, new_blk_ptr);
+}
+
 void InstrumentPass::GenFragDebugOutputCode(
     uint32_t base_offset_id,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
@@ -427,12 +449,18 @@ void InstrumentPass::GenDebugOutputCode(
       new_blk_ptr);
   // TODO(greg-lunarg): Add support for all stages
   uint32_t curr_record_offset = 0;
-  if (stage_idx == SpvExecutionModelFragment) {
-    GenFragDebugOutputCode(obuf_curr_sz_id, new_blk_ptr);
-    curr_record_offset = kInstFragOutRecordSize;
-  }
-  else {
-    assert(false && "unsupported stage");
+  switch (stage_idx) {
+    case SpvExecutionModelFragment:
+      GenFragDebugOutputCode(obuf_curr_sz_id, new_blk_ptr);
+      curr_record_offset = kInstFragOutRecordSize;
+      break;
+    case SpvExecutionModelVertex:
+      GenVertDebugOutputCode(obuf_curr_sz_id, new_blk_ptr);
+      curr_record_offset = kInstVertOutRecordSize;
+      break;
+    default:
+      assert(false && "unsupported stage");
+      break;
   }
   // Gen writes of validation specific data
   for (auto vid : validation_data) {
@@ -613,6 +641,30 @@ uint32_t InstrumentPass::GetFragCoordId() {
       &frag_coord_id_);
 }
 
+uint32_t InstrumentPass::GetVertexId() {
+  return GetBuiltinVarId(SpvBuiltInVertexId, GetUintId(),
+      &vertex_id_);
+}
+
+uint32_t InstrumentPass::GetInstanceId() {
+  return GetBuiltinVarId(SpvBuiltInInstanceId, GetUintId(),
+      &instance_id_);
+}
+
+void InstrumentPass::AddVarToEntryPoints(uint32_t var_id) {
+  uint32_t ocnt = 0;
+  for (auto& e : get_module()->entry_points()) {
+    bool found = false;
+    e.ForEachInOperand([&ocnt, &found, &var_id](const uint32_t* idp) {
+      if (ocnt >= kEntryPointInterfaceInIdx) {
+        if (*idp == var_id) found = true;
+      }
+      ++ocnt;
+    });
+    if (!found) e.AddOperand({ SPV_OPERAND_TYPE_ID,{ var_id } });
+  }
+}
+
 bool InstrumentPass::InstProcessCallTreeFromRoots(
     InstProcessFunction& pfn,
     std::queue<uint32_t>* roots,
@@ -646,37 +698,27 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
   // with differing execution models.
   uint32_t ecnt = 0;
   uint32_t eStage;
-  for (auto& e : module->entry_points()) {
+  for (auto& e : get_module()->entry_points()) {
     if (ecnt == 0)
       eStage = e.GetSingleWordInOperand(kEntryPointExecutionModelInIdx);
     else if (e.GetSingleWordInOperand(kEntryPointExecutionModelInIdx) != eStage)
       return false;
   }
-  // Only supporting fragment shaders at the moment.
+  // Only supporting vertex and fragment shaders at the moment.
   // TODO(greg-lunarg): Handle all stages.
-  if (eStage != SpvExecutionModelFragment)
+  if (eStage != SpvExecutionModelVertex &&
+      eStage != SpvExecutionModelFragment)
     return false;
   // Add together the roots of all entry points
   std::queue<uint32_t> roots;
-  for (auto& e : module->entry_points()) {
+  for (auto& e : get_module()->entry_points()) {
     roots.push(e.GetSingleWordInOperand(kEntryPointFunctionIdInIdx));
   }
   bool modified = InstProcessCallTreeFromRoots(pfn, &roots, eStage);
-  // If any function is modified, add FragCoord to all entry points that
-  // don't have it.
-  if (modified) {
-    uint32_t ocnt = 0;
-    for (auto& e : module->entry_points()) {
-      bool found = false;
-      e.ForEachInOperand([&ocnt,&found,this](const uint32_t* idp){
-        if (ocnt >= kEntryPointInterfaceInIdx) {
-          if (*idp == this->GetFragCoordId()) found = true;
-        }
-        ++ocnt;
-      });
-      if (!found) e.AddOperand({ SPV_OPERAND_TYPE_ID, {GetFragCoordId()} });
-    }
-  }
+  // Add builtins to all entry points that don't have them.
+  if (frag_coord_id_ != 0) AddVarToEntryPoints(frag_coord_id_);
+  if (vertex_id_ != 0) AddVarToEntryPoints(vertex_id_);
+  if (instance_id_ != 0) AddVarToEntryPoints(instance_id_);
   return modified;
 }
 
@@ -688,7 +730,6 @@ void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
   uint_id_ = 0;
   v4uint_id_ = 0;
   bool_id_ = 0;
-
   vertex_id_ = 0;
   instance_id_ = 0;
   frag_coord_id_ = 0;
