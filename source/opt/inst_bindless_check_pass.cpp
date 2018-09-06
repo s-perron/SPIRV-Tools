@@ -23,12 +23,14 @@ static const int kSpvImageSampleImageIdIdx = 2;
 static const int kSpvImageSampleImageIdInIdx = 0;
 static const int kSpvSampledImageImageIdInIdx = 0;
 static const int kSpvSampledImageSamplerIdInIdx = 1;
+static const int kSpvImageSampledImageIdInIdx = 0;
 static const int kSpvLoadPtrIdInIdx = 0;
 static const int kSpvAccessChainBaseIdInIdx = 0;
 static const int kSpvAccessChainIndex0IdInIdx = 1;
 static const int kSpvTypePointerTypeIdInIdx = 1;
 static const int kSpvTypeArrayLengthIdInIdx = 1;
 static const int kSpvConstantValueInIdx = 0;
+
 
 // Bindless-specific Output Record Offsets
 static const int kInstBindlessOutDescIndex = 0;
@@ -47,9 +49,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     uint32_t stage_idx) {
   // Look for reference through bindless descriptor. If not, return.
   std::unique_ptr<BasicBlock> new_blk_ptr;
-  uint32_t sampledImageId;
+  uint32_t imageId;
   switch (ref_inst_itr->opcode()) {
-    // TODO(greg-lunarg): Add all other descriptor-based references
     case SpvOp::SpvOpImageSampleImplicitLod:
     case SpvOp::SpvOpImageSampleExplicitLod:
     case SpvOp::SpvOpImageSampleDrefImplicitLod:
@@ -71,26 +72,41 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     case SpvOp::SpvOpImageSparseSampleProjDrefExplicitLod:
     case SpvOp::SpvOpImageSparseGather:
     case SpvOp::SpvOpImageSparseDrefGather:
-      sampledImageId =
+    case SpvOp::SpvOpImageFetch:
+    case SpvOp::SpvOpImageRead:
+    case SpvOp::SpvOpImageQueryFormat:
+    case SpvOp::SpvOpImageQueryOrder:
+    case SpvOp::SpvOpImageQuerySizeLod:
+    case SpvOp::SpvOpImageQuerySize:
+    case SpvOp::SpvOpImageQueryLevels:
+    case SpvOp::SpvOpImageQuerySamples:
+    case SpvOp::SpvOpImageSparseFetch:
+    case SpvOp::SpvOpImageSparseRead:
+    case SpvOp::SpvOpImageWrite:
+      imageId =
           ref_inst_itr->GetSingleWordInOperand(kSpvImageSampleImageIdInIdx);
       break;
     default:
       return;
   }
-  Instruction* sampledImageInst = get_def_use_mgr()->GetDef(sampledImageId);
+  Instruction* imageInst = get_def_use_mgr()->GetDef(imageId);
   uint32_t loadId;
   Instruction* loadInst;
-  if (sampledImageInst->opcode() == SpvOp::SpvOpSampledImage) {
-    loadId = sampledImageInst->GetSingleWordInOperand(kSpvSampledImageImageIdInIdx);
+  if (imageInst->opcode() == SpvOp::SpvOpSampledImage) {
+    loadId = imageInst->GetSingleWordInOperand(kSpvSampledImageImageIdInIdx);
+    loadInst = get_def_use_mgr()->GetDef(loadId);
+  }
+  else if (imageInst->opcode() == SpvOp::SpvOpImage) {
+    loadId = imageInst->GetSingleWordInOperand(kSpvImageSampledImageIdInIdx);
     loadInst = get_def_use_mgr()->GetDef(loadId);
   }
   else {
-    loadId = sampledImageId;
-    loadInst = sampledImageInst;
-    sampledImageId = 0;
+    loadId = imageId;
+    loadInst = imageInst;
+    imageId = 0;
   }
   if (loadInst->opcode() != SpvOp::SpvOpLoad) {
-    assert(false && "unexpected image value");
+    assert(false && "expected image load");
     return;
   }
   uint32_t ptrId = loadInst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
@@ -135,14 +151,16 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
     GenDebugOutputCode(function_idx, instruction_idx,
         stage_idx, { error_id, indexId, lengthId }, new_blocks, &new_blk_ptr);
-    // Set the original reference id to zero. Kill original reference
-    // before reusing id.
+    // Set the original reference id to zero, if it exists. Kill original
+    // reference before reusing id.
     uint32_t ref_type_id = ref_inst_itr->type_id();
     uint32_t ref_result_id = ref_inst_itr->result_id();
-    uint32_t nullId = GetNullId(ref_type_id);
     context()->KillInst(&*ref_inst_itr);
-    AddUnaryOp(ref_type_id, ref_result_id, SpvOpCopyObject,
-        nullId, &new_blk_ptr);
+    if (ref_result_id != 0) {
+      uint32_t nullId = GetNullId(ref_type_id);
+      AddUnaryOp(ref_type_id, ref_result_id, SpvOpCopyObject,
+          nullId, &new_blk_ptr);
+    }
   }
   // Otherwise generate full runtime bounds test code with true branch
   // being full reference and false branch being debug output and zero
@@ -170,35 +188,36 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     get_def_use_mgr()->AnalyzeInstDefUse(&*newLoadInst);
     new_blk_ptr->AddInstruction(std::move(newLoadInst));
     get_decoration_mgr()->CloneDecorations(loadInst->result_id(), newLoadId);
-    uint32_t imageId = newLoadId;
-    // Clone SampledImage with new load, if needed
-    if (sampledImageId != 0) {
-      imageId = TakeNextId();
-      AddBinaryOp(sampledImageInst->type_id(), imageId, SpvOpSampledImage,
-          newLoadId, sampledImageInst->GetSingleWordInOperand(
-          kSpvSampledImageSamplerIdInIdx), &new_blk_ptr);
-      get_decoration_mgr()->CloneDecorations(sampledImageInst->result_id(),
-          imageId);
+    uint32_t newImageId = newLoadId;
+    // Clone Image/SampledImage with new load, if needed
+    if (imageId != 0) {
+      newImageId = TakeNextId();
+      if (imageInst->opcode() == SpvOp::SpvOpSampledImage) {
+        AddBinaryOp(imageInst->type_id(), newImageId, SpvOpSampledImage,
+          newLoadId, imageInst->GetSingleWordInOperand(
+            kSpvSampledImageSamplerIdInIdx), &new_blk_ptr);
+      }
+      else {
+        assert(imageInst->opcode() == SpvOp::SpvOpImage && "expecting OpImage");
+        AddUnaryOp(imageInst->type_id(), newImageId, SpvOpImage,
+          newLoadId, &new_blk_ptr);
+      }
+      get_decoration_mgr()->CloneDecorations(imageId, newImageId);
     }
     // Clone original reference using new image code
     std::unique_ptr<Instruction> newRefInst(ref_inst_itr->Clone(context()));
-    uint32_t newRefId = TakeNextId();
-    newRefInst->SetResultId(newRefId);
-    switch (ref_inst_itr->opcode()) {
-      // TODO(greg-lunarg): Add all other descriptor-based references
-      case SpvOp::SpvOpImageSampleImplicitLod:
-      case SpvOp::SpvOpImageSampleExplicitLod:
-        newRefInst->SetOperand(kSpvImageSampleImageIdIdx, {imageId});
-        break;
-      default:
-        assert(false && "unexpected reference opcode");
-        break;
-    }
-    // Register new reference and add to new block
     uint32_t ref_result_id = ref_inst_itr->result_id();
+    uint32_t newRefId = 0;
+    if (ref_result_id != 0) {
+      newRefId = TakeNextId();
+      newRefInst->SetResultId(newRefId);
+    }
+    newRefInst->SetOperand(kSpvImageSampleImageIdIdx, { newImageId });
+    // Register new reference and add to new block
     get_def_use_mgr()->AnalyzeInstDefUse(&*newRefInst);
     new_blk_ptr->AddInstruction(std::move(newRefInst));
-    get_decoration_mgr()->CloneDecorations(ref_result_id, newRefId);
+    if (newRefId != 0)
+      get_decoration_mgr()->CloneDecorations(ref_result_id, newRefId);
     // Close valid block and gen invalid block
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
@@ -209,17 +228,20 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     uint32_t lastInvalidBlkId = new_blk_ptr->GetLabelInst()->result_id();
     // Gen zero for invalid  reference
     uint32_t ref_type_id = ref_inst_itr->type_id();
-    uint32_t nullId = GetNullId(ref_type_id);
+    uint32_t nullId = 0;
+    if (newRefId != 0)
+      nullId = GetNullId(ref_type_id);
     // Close invalid block and gen merge block
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(std::move(mergeLabel)));
-    // Gen phi of new reference and zero. Use result id of original reference
-    // so we don't have to do a replace. Kill original reference before reusing
-    // its id.
+    // Gen phi of new reference and zero, if necessary. Use result id of
+    // original reference so we don't have to do a replace. Kill original
+    // reference before reusing its id.
     context()->KillInst(&*ref_inst_itr);
-    AddPhi(ref_type_id, ref_result_id, newRefId, validBlkId,
-        nullId, lastInvalidBlkId, &new_blk_ptr);
+    if (newRefId != 0)
+      AddPhi(ref_type_id, ref_result_id, newRefId, validBlkId,
+          nullId, lastInvalidBlkId, &new_blk_ptr);
   }
   MovePostludeCode(ref_block_itr, &new_blk_ptr);
   // Add remainder/merge block to new blocks
@@ -267,11 +289,9 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
       for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
       modified = true;
       // Restart instrumenting at beginning of last new block,
-      // but skip over new phi or copy instruction.
+      // but skip over any new phi or copy instruction.
       ii = bi->begin();
-      assert((ii->opcode() == SpvOpPhi || ii->opcode() == SpvOpCopyObject) &&
-          "unexpected instruction at end of instrumentation");
-      ++ii;
+      if (ii->opcode() == SpvOpPhi || ii->opcode() == SpvOpCopyObject) ++ii;
       newBlocks.clear();
     }
   }
