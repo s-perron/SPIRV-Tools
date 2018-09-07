@@ -180,11 +180,20 @@ class InstrumentPass : public Pass {
 
   // Return id of pointer to builtin |builtin_val|.
   uint32_t FindBuiltin(uint32_t builtin_val);
+
+  // Add |decoration, decoration_value| of |inst_id| to module. Also
+  // update decoration manager.
+  void AddDecoration(uint32_t inst_id, uint32_t decoration);
   
   // Add |decoration, decoration_value| of |inst_id| to module. Also
   // update decoration manager.
-  void AddDecoration(uint32_t inst_id, uint32_t decoration,
+  void AddDecorationVal(uint32_t inst_id, uint32_t decoration,
     uint32_t decoration_value);
+
+  // Add |decoration, decoration_value| of |inst_id| to module. Also
+  // update decoration manager.
+  void AddMemberDecoration(uint32_t member, uint32_t inst_id,
+    uint32_t decoration, uint32_t decoration_value);
 
   // Add unconditional branch to labelId to end of block block_ptr.
   void AddBranch(uint32_t labelId, std::unique_ptr<BasicBlock>* block_ptr);
