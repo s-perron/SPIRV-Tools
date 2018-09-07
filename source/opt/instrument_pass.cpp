@@ -328,6 +328,15 @@ void InstrumentPass::GenDebugOutputFieldCode(
     uint32_t field_offset,
     uint32_t field_value_id,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  // Cast value to 32-bit unsigned if necessary
+  uint32_t val_id = field_value_id;
+  Instruction* val_inst = get_def_use_mgr()->GetDef(val_id);
+  if (val_inst->type_id() != GetUintId()) {
+    val_id = TakeNextId();
+    AddUnaryOp(GetUintId(), val_id, SpvOpBitcast, field_value_id,
+        new_blk_ptr);
+  }
+  // Store value
   uint32_t data_idx_id = TakeNextId();
   AddBinaryOp(GetUintId(), data_idx_id, SpvOpIAdd,
       base_offset_id, GetUintConstantId(field_offset), new_blk_ptr);
@@ -335,7 +344,7 @@ void InstrumentPass::GenDebugOutputFieldCode(
   AddTernaryOp(GetOutputBufferUintPtrId(), achain_id, SpvOpAccessChain,
       GetOutputBufferId(), GetUintConstantId(kDebugOutputDataOffset),
       data_idx_id, new_blk_ptr);
-  AddBinaryOp(0, 0, SpvOpStore, achain_id, field_value_id, new_blk_ptr);
+  AddBinaryOp(0, 0, SpvOpStore, achain_id, val_id, new_blk_ptr);
 }
 
 void InstrumentPass::GenCommonDebugOutputCode(
