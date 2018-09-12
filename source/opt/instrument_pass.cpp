@@ -659,6 +659,13 @@ uint32_t InstrumentPass::GetBoolId() {
   return bool_id_;
 }
 
+uint32_t InstrumentPass::GetVoidId() {
+  analysis::TypeManager* type_mgr = context()->get_type_mgr();
+  analysis::Void void_ty;
+  analysis::Type* reg_void_ty = type_mgr->GetRegisteredType(&void_ty);
+  return type_mgr->GetTypeInstruction(reg_void_ty);
+}
+
 uint32_t InstrumentPass::GetBuiltinVarId(uint32_t builtin, uint32_t type_id,
     uint32_t* var_id) {
   // If not yet known, look for one in shader
@@ -694,6 +701,36 @@ uint32_t InstrumentPass::GetInstanceId() {
       &instance_id_);
 }
 
+uint32_t InstrumentPass::GetOutputFunctionId(uint32_t arg_cnt) {
+  if (output_func_id_ == 0) {
+    // Create debug output function
+    output_func_id_ = TakeNextId();
+    analysis::TypeManager* type_mgr = context()->get_type_mgr();
+    std::vector<const analysis::Type*> arg_vec;
+    for (int a = 0; a < arg_cnt; ++arg_cnt)
+      arg_vec.push_back(type_mgr->GetType(GetUintId()));
+    analysis::Function func_ty(type_mgr->GetType(GetVoidId()), arg_vec);
+    analysis::Type* reg_func_ty = type_mgr->GetRegisteredType(&func_ty);
+    std::unique_ptr<Instruction> func_inst(
+        new Instruction(get_module()->context(), SpvOpFunction, GetVoidId(),
+            output_func_id_, 
+            { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
+            { SpvFunctionControlMaskNone } },
+            { spv_operand_type_t::SPV_OPERAND_TYPE_ID,
+            { type_mgr->GetTypeInstruction(reg_func_ty) } } }));
+    get_def_use_mgr()->AnalyzeInstDefUse(&*func_inst);
+    std::unique_ptr<Function> output_func = MakeUnique<Function>(
+        std::move(func_inst));
+    // Create first block
+    uint32_t test_blk_id = TakeNextId();
+    std::unique_ptr<Instruction> test_label(NewLabel(test_blk_id));
+    std::unique_ptr<BasicBlock> block = MakeUnique<BasicBlock>(
+        std::move(test_label));
+  }
+  assert(arg_cnt == output_func_arg_cnt_ && "bad arg count");
+  return output_func_id_;
+}
+
 void InstrumentPass::AddVarToEntryPoints(uint32_t var_id) {
   uint32_t ocnt = 0;
   for (auto& e : get_module()->entry_points()) {
@@ -720,6 +757,9 @@ bool InstrumentPass::InstProcessCallTreeFromRoots(
     const uint32_t fi = roots->front();
     roots->pop();
     if (done.insert(fi).second) {
+      // Initialize per function variables
+      func_arg_var_ids_.clear();
+      // Process function
       Function* fn = id2function_.at(fi);
       modified = pfn(fn, stage_idx) || modified;
       AddCalls(fn, roots);
@@ -769,6 +809,8 @@ void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
   validation_id_ = validation_id;
   output_buffer_id_ = 0;
   output_buffer_uint_ptr_id_ = 0;
+  output_func_id_ = 0;
+  output_func_arg_cnt_ = 0;
   v4float_id_ = 0;
   uint_id_ = 0;
   v4uint_id_ = 0;

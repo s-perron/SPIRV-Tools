@@ -28,11 +28,11 @@ static const int kSpvTypePointerTypeIdInIdx = 1;
 static const int kSpvTypeArrayLengthIdInIdx = 1;
 static const int kSpvConstantValueInIdx = 0;
 
-
 // Bindless-specific Output Record Offsets
-static const int kInstBindlessOutDescIndex = 0;
-static const int kInstBindlessOutDescBound = 1;
-static const int kInstBindlessOutRecordSize = 2;
+static const int kInstBindlessOutError = 0;
+static const int kInstBindlessOutDescIndex = 1;
+static const int kInstBindlessOutDescBound = 2;
+static const int kInstBindlessOutRecordSize = 3;
 
 namespace spvtools {
 namespace opt {
@@ -136,7 +136,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     return;
   // If index and bound both compile-time constants and index >= bound,
   // generate debug output error code and use zero as referenced value.
-  uint32_t error_id = GetUintConstantId(kInstErrorBindlessImageBounds);
+  uint32_t error_id = GetUintConstantId(kInstErrorBindlessBounds);
   uint32_t lengthId =
     ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
   Instruction* lengthInst = get_def_use_mgr()->GetDef(lengthId);

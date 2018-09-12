@@ -30,10 +30,8 @@
 static const int kInstValidationIdBindless = 0;
 
 // Error Codes
-static const uint32_t kInstErrorBindlessImageBounds = 0;
-static const uint32_t kInstErrorBindlessSamplerBounds = 1;
-static const uint32_t kInstErrorBindlessImageUninitialized = 2;
-static const uint32_t kInstErrorBindlessSamplerUninitialized = 3;
+static const uint32_t kInstErrorBindlessBounds = 0;
+static const uint32_t kInstErrorBindlessUninitialized = 1;
 
 // Debug Buffer Bindings
 static const uint32_t kDebugOutputBindingBindless = 0;
@@ -236,6 +234,9 @@ class InstrumentPass : public Pass {
   // Return id for 32-bit unsigned type
   uint32_t GetBoolId();
 
+  // Return id for void type
+  uint32_t GetVoidId();
+
   // Return id for output buffer uint type
   uint32_t GetOutputBufferUintPtrId();
   
@@ -263,6 +264,10 @@ class InstrumentPass : public Pass {
 
   // Return id for v4uint type
   uint32_t GetVec4UintId();
+
+  // Return id for output function. Define if it doesn't exist with
+  // |arg_cnt| uint32 arguments.
+  uint32_t GetOutputFunctionId(uint32_t arg_cnt);
 
   // Add |var_id| to all entry points if not there.
   void AddVarToEntryPoints(uint32_t var_id);
@@ -304,6 +309,15 @@ class InstrumentPass : public Pass {
 
   // type id for output buffer element
   uint32_t output_buffer_uint_ptr_id_;
+
+  // id for debug output function
+  uint32_t output_func_id_;
+
+  // arg count for output function
+  uint32_t output_func_arg_cnt_;
+
+  // arg variables for output function
+  std::vector<uint32_t> func_arg_var_ids_;
 
   // id for Vertex
   uint32_t vertex_id_;
