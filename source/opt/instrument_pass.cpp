@@ -663,7 +663,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     output_func_id_ = TakeNextId();
     analysis::TypeManager* type_mgr = context()->get_type_mgr();
     std::vector<const analysis::Type*> param_types;
-    for (int c = 0; c < param_cnt; ++param_cnt)
+    for (uint32_t c = 0; c < param_cnt; ++param_cnt)
       param_types.push_back(type_mgr->GetType(GetUintId()));
     analysis::Function func_ty(type_mgr->GetType(GetVoidId()), param_types);
     analysis::Type* reg_func_ty = type_mgr->GetRegisteredType(&func_ty);
@@ -679,7 +679,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
         std::move(func_inst));
     // Add parameters
     std::vector<uint32_t> param_vec;
-    for (int c = 0; c < param_cnt; ++param_cnt) {
+    for (uint32_t c = 0; c < param_cnt; ++param_cnt) {
       uint32_t pid = TakeNextId();
       param_vec.push_back(pid);
       std::unique_ptr<Instruction> param_inst(
@@ -757,7 +757,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
       break;
     }
     // Gen writes of validation specific data
-    for (int i = 0; i < val_spec_param_cnt; ++i) {
+    for (uint32_t i = 0; i < val_spec_param_cnt; ++i) {
       uint32_t vid = TakeNextId();
       AddUnaryOp(GetUintId(), vid, SpvOpLoad,
           param_vec[kInstCommonOutFunctionIdx + i], &new_blk_ptr);
