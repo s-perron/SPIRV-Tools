@@ -55,6 +55,7 @@ class InstBindlessCheckPass : public InstrumentPass {
    // and to be inserted into the function after the block at
    // ref_block_itr is replaced with new_blocks.
    void GenBindlessCheckCode(std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+     std::vector<std::unique_ptr<Instruction>>* new_vars,
      BasicBlock::iterator ref_inst_itr,
      UptrVectorIterator<BasicBlock> ref_block_itr,
      uint32_t function_idx,

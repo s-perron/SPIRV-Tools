@@ -129,9 +129,16 @@ class InstrumentPass : public Pass {
     uint32_t stage_idx,
     const std::vector<uint32_t> &validation_data,
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::vector<std::unique_ptr<Instruction>>* new_vars,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
-  // Add binary instruction |type_id, result_id, opcode, operand1, operand2| to
+  // Add nullary instruction |type_id, result_id, opcode| to
+  // |block_ptr|.
+  void AddNullaryOp(
+    uint32_t type_id, uint32_t result_id, SpvOp opcode,
+    std::unique_ptr<BasicBlock>* block_ptr);
+
+  // Add unary instruction |type_id, result_id, opcode, operand1| to
   // |block_ptr|.
   void AddUnaryOp(
     uint32_t type_id, uint32_t result_id, SpvOp opcode,
@@ -266,8 +273,9 @@ class InstrumentPass : public Pass {
   uint32_t GetVec4UintId();
 
   // Return id for output function. Define if it doesn't exist with
-  // |arg_cnt| uint32 arguments.
-  uint32_t GetOutputFunctionId(uint32_t arg_cnt);
+  // |val_spec_arg_cnt| validation-specific uint32 arguments.
+  uint32_t GetOutputFunctionId(uint32_t stage_idx,
+      uint32_t val_spec_param_cnt);
 
   // Add |var_id| to all entry points if not there.
   void AddVarToEntryPoints(uint32_t var_id);
@@ -313,8 +321,8 @@ class InstrumentPass : public Pass {
   // id for debug output function
   uint32_t output_func_id_;
 
-  // arg count for output function
-  uint32_t output_func_arg_cnt_;
+  // param count for output function
+  uint32_t output_func_param_cnt_;
 
   // arg variables for output function
   std::vector<uint32_t> func_arg_var_ids_;
