@@ -286,6 +286,11 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
         bb->SetParent(func);
       }
       bi = bi.InsertBefore(&newBlocks);
+      // Add new local variables, if any
+      if (newVars.size() != 0) {
+        func->begin()->begin().InsertBefore(std::move(newVars));
+        newVars.clear();
+      }
       // Reset block iterator to last new block
       for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
       modified = true;

@@ -452,16 +452,32 @@ void InstrumentPass::GenDebugOutputCode(
     uint32_t func_idx,
     uint32_t instruction_idx,
     uint32_t stage_idx,
-    const std::vector<uint32_t> &validation_data,
+    const std::vector<uint32_t> &validation_ids,
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     std::vector<std::unique_ptr<Instruction>>* new_vars,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
   // Create arg variables if needed
   if (func_arg_var_ids_.size() == 0) {
-
+    uint32_t var_id = TakeNextId();
+    std::unique_ptr<Instruction> newVarOp(
+      new Instruction(context(), SpvOpVariable, GetUintId(), var_id,
+      { { SPV_OPERAND_TYPE_LITERAL_INTEGER, { SpvStorageClassFunction } } }));
+    get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
+    new_vars->push_back(std::move(newVarOp));
+    func_arg_var_ids_.push_back(var_id);
   }
   // Call debug output function. Pass func_idx, instruction_idx and
   // validation data as args.
+  AddBinaryOp(0, 0, SpvOpStore, func_arg_var_ids_[kInstCommonParamFuncIdx],
+      GetUintConstantId(func_idx), new_blk_ptr);
+  AddBinaryOp(0, 0, SpvOpStore, func_arg_var_ids_[kInstCommonParamInstIdx],
+      GetUintConstantId(instruction_idx), new_blk_ptr);
+  uint32_t vcnt = 0;
+  for (uint32_t vid : validation_ids) {
+    AddBinaryOp(0, 0, SpvOpStore,
+        func_arg_var_ids_[kInstCommonParamCnt + vcnt], vid, new_blk_ptr);
+    ++vcnt;
+  }
 }
 
 bool InstrumentPass::IsSameBlockOp(const Instruction* inst) const {
@@ -732,12 +748,12 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     uint32_t mergeBlkId = TakeNextId();
     uint32_t writeBlkId = TakeNextId();
     std::unique_ptr<Instruction> mergeLabel(NewLabel(mergeBlkId));
-    std::unique_ptr<Instruction> validLabel(NewLabel(writeBlkId));
+    std::unique_ptr<Instruction> writeLabel(NewLabel(writeBlkId));
     AddSelectionMerge(mergeBlkId, SpvSelectionControlMaskNone, &new_blk_ptr);
     AddBranchCond(obuf_safe_id, writeBlkId, mergeBlkId, &new_blk_ptr);
     // Close safety test block and gen write block
     output_func->AddBasicBlock(std::move(new_blk_ptr));
-    new_blk_ptr = MakeUnique<BasicBlock>(std::move(validLabel));
+    new_blk_ptr = MakeUnique<BasicBlock>(std::move(writeLabel));
     GenCommonDebugOutputCode(obuf_record_sz,
         param_vec[kInstCommonParamFuncIdx], param_vec[kInstCommonParamInstIdx],
         stage_idx, obuf_curr_sz_id, &new_blk_ptr);

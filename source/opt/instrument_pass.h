@@ -127,7 +127,7 @@ class InstrumentPass : public Pass {
     uint32_t func_idx,
     uint32_t instruction_idx,
     uint32_t stage_idx,
-    const std::vector<uint32_t> &validation_data,
+    const std::vector<uint32_t> &validation_ids,
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     std::vector<std::unique_ptr<Instruction>>* new_vars,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
