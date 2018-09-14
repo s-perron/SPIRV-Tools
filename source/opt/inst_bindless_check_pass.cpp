@@ -39,7 +39,6 @@ namespace opt {
 
 void InstBindlessCheckPass::GenBindlessCheckCode(
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-    std::vector<std::unique_ptr<Instruction>>* new_vars,
     BasicBlock::iterator ref_inst_itr,
     UptrVectorIterator<BasicBlock> ref_block_itr,
     uint32_t function_idx,
@@ -148,8 +147,17 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
       return;
     MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
     GenDebugOutputCode(function_idx, instruction_idx,
-        stage_idx, { error_id, indexId, lengthId }, new_blocks, new_vars,
-        &new_blk_ptr);
+        stage_idx, { error_id, indexId, lengthId }, new_blocks, &new_blk_ptr);
+    // Calling routine expects at least two blocks and will restart analysis
+    // in last block. If no new blocks generated, close this block and start
+    // new block.
+    if (new_blocks->size() == 0) {
+      uint32_t next_label_id = TakeNextId();
+      std::unique_ptr<Instruction> nextLabel(NewLabel(next_label_id));
+      AddBranch(next_label_id, &new_blk_ptr);
+      new_blocks->push_back(std::move(new_blk_ptr));
+      new_blk_ptr.reset(new BasicBlock(std::move(nextLabel)));
+    }
     // Set the original reference id to zero, if it exists. Kill original
     // reference before reusing id.
     uint32_t ref_type_id = ref_inst_itr->type_id();
@@ -222,7 +230,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
     GenDebugOutputCode(function_idx, instruction_idx,
-        stage_idx, { error_id, indexId, lengthId }, new_blocks, new_vars,
+        stage_idx, { error_id, indexId, lengthId }, new_blocks,
         &new_blk_ptr);
     // Remember last invalid block id
     uint32_t lastInvalidBlkId = new_blk_ptr->GetLabelInst()->result_id();
@@ -258,7 +266,6 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
     ++function_idx;
   }
   std::vector<std::unique_ptr<BasicBlock>> newBlocks;
-  std::vector<std::unique_ptr<Instruction>> newVars;
   // Count function instruction
   uint32_t instruction_idx = 1;
   // Using block iterators here because of block erasures and insertions.
@@ -269,7 +276,7 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
       // Bump instruction count if debug instructions
       instruction_idx += static_cast<uint32_t>(ii->dbg_line_insts().size());
       // Generate bindless check if warranted
-      GenBindlessCheckCode(&newBlocks, &newVars, ii, bi, function_idx,
+      GenBindlessCheckCode(&newBlocks, ii, bi, function_idx,
           instruction_idx, stage_idx);
       if (newBlocks.size() == 0) {
         ++ii;
@@ -286,11 +293,6 @@ bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx
         bb->SetParent(func);
       }
       bi = bi.InsertBefore(&newBlocks);
-      // Add new local variables, if any
-      if (newVars.size() != 0) {
-        func->begin()->begin().InsertBefore(std::move(newVars));
-        newVars.clear();
-      }
       // Reset block iterator to last new block
       for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
       modified = true;

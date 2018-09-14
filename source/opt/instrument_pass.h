@@ -121,6 +121,12 @@ class InstrumentPass : public Pass {
   // Return size of common and stage-specific output record members
   uint32_t GetStageOutputRecordSize(uint32_t stage_idx);
 
+  // Generate code to cast |value_id| to unsigned, if needed. Return
+  // an id to the unsigned equivalent.
+  uint32_t GenUintCastCode(
+    uint32_t value_id,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
   // Generate instructions which will write a record to the end of the debug
   // output buffer for the current shader.
   void GenDebugOutputCode(
@@ -129,7 +135,6 @@ class InstrumentPass : public Pass {
     uint32_t stage_idx,
     const std::vector<uint32_t> &validation_ids,
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-    std::vector<std::unique_ptr<Instruction>>* new_vars,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Add nullary instruction |type_id, result_id, opcode| to
@@ -323,9 +328,6 @@ class InstrumentPass : public Pass {
 
   // param count for output function
   uint32_t output_func_param_cnt_;
-
-  // arg variables for output function
-  std::vector<uint32_t> func_arg_var_ids_;
 
   // id for Vertex
   uint32_t vertex_id_;

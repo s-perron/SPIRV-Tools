@@ -336,19 +336,27 @@ uint32_t InstrumentPass::GetUintConstantId(uint32_t u) {
   return uint_inst->result_id();
 }
 
+uint32_t InstrumentPass::GenUintCastCode(
+  uint32_t val_id,
+  std::unique_ptr<BasicBlock>* new_blk_ptr) {
+  // Cast value to 32-bit unsigned if necessary
+  uint32_t uval_id = val_id;
+  Instruction* val_inst = get_def_use_mgr()->GetDef(val_id);
+  if (val_inst->type_id() != GetUintId()) {
+    uval_id = TakeNextId();
+    AddUnaryOp(GetUintId(), uval_id, SpvOpBitcast, val_id,
+      new_blk_ptr);
+  }
+  return uval_id;
+}
+
 void InstrumentPass::GenDebugOutputFieldCode(
     uint32_t base_offset_id,
     uint32_t field_offset,
     uint32_t field_value_id,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
   // Cast value to 32-bit unsigned if necessary
-  uint32_t val_id = field_value_id;
-  Instruction* val_inst = get_def_use_mgr()->GetDef(val_id);
-  if (val_inst->type_id() != GetUintId()) {
-    val_id = TakeNextId();
-    AddUnaryOp(GetUintId(), val_id, SpvOpBitcast, field_value_id,
-        new_blk_ptr);
-  }
+  uint32_t val_id = GenUintCastCode(field_value_id, new_blk_ptr);
   // Store value
   uint32_t data_idx_id = TakeNextId();
   AddBinaryOp(GetUintId(), data_idx_id, SpvOpIAdd,
@@ -362,8 +370,8 @@ void InstrumentPass::GenDebugOutputFieldCode(
 
 void InstrumentPass::GenCommonDebugOutputCode(
     uint32_t record_sz,
-    uint32_t func_param_id,
-    uint32_t inst_param_id,
+    uint32_t func_id,
+    uint32_t inst_id,
     uint32_t stage_idx,
     uint32_t base_offset_id,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
@@ -374,15 +382,11 @@ void InstrumentPass::GenCommonDebugOutputCode(
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutShaderId,
       GetUintConstantId(shader_id_), new_blk_ptr);
   // Store Function Idx
-  uint32_t func_idx_id = TakeNextId();
-  AddUnaryOp(GetUintId(), func_idx_id, SpvOpLoad, func_param_id, new_blk_ptr);
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutFunctionIdx,
-      func_idx_id, new_blk_ptr);
+      func_id, new_blk_ptr);
   // Store Instruction Idx
-  uint32_t inst_idx_id = TakeNextId();
-  AddUnaryOp(GetUintId(), inst_idx_id, SpvOpLoad, inst_param_id, new_blk_ptr);
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutInstructionIdx,
-      inst_idx_id, new_blk_ptr);
+      inst_id, new_blk_ptr);
   // Store Stage Idx
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutStageIdx,
       GetUintConstantId(stage_idx), new_blk_ptr);
@@ -454,30 +458,25 @@ void InstrumentPass::GenDebugOutputCode(
     uint32_t stage_idx,
     const std::vector<uint32_t> &validation_ids,
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-    std::vector<std::unique_ptr<Instruction>>* new_vars,
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
-  // Create arg variables if needed
-  if (func_arg_var_ids_.size() == 0) {
-    uint32_t var_id = TakeNextId();
-    std::unique_ptr<Instruction> newVarOp(
-      new Instruction(context(), SpvOpVariable, GetUintId(), var_id,
-      { { SPV_OPERAND_TYPE_LITERAL_INTEGER, { SpvStorageClassFunction } } }));
-    get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
-    new_vars->push_back(std::move(newVarOp));
-    func_arg_var_ids_.push_back(var_id);
-  }
   // Call debug output function. Pass func_idx, instruction_idx and
-  // validation data as args.
-  AddBinaryOp(0, 0, SpvOpStore, func_arg_var_ids_[kInstCommonParamFuncIdx],
-      GetUintConstantId(func_idx), new_blk_ptr);
-  AddBinaryOp(0, 0, SpvOpStore, func_arg_var_ids_[kInstCommonParamInstIdx],
-      GetUintConstantId(instruction_idx), new_blk_ptr);
-  uint32_t vcnt = 0;
+  // validation ids as args.
+  uint32_t call_id = TakeNextId();
+  uint32_t val_id_cnt = static_cast<uint32_t>(validation_ids.size());
+  uint32_t output_func_id = GetOutputFunctionId(stage_idx, val_id_cnt);
+  std::unique_ptr<Instruction> newCallOp(
+      new Instruction(context(), SpvOpFunctionCall, GetVoidId(), call_id,
+      { { SPV_OPERAND_TYPE_ID, { output_func_id } } }));
+  newCallOp->AddOperand({ SPV_OPERAND_TYPE_ID,
+      { GetUintConstantId(func_idx) } });
+  newCallOp->AddOperand({ SPV_OPERAND_TYPE_ID,
+      { GetUintConstantId(instruction_idx) } });
   for (uint32_t vid : validation_ids) {
-    AddBinaryOp(0, 0, SpvOpStore,
-        func_arg_var_ids_[kInstCommonParamCnt + vcnt], vid, new_blk_ptr);
-    ++vcnt;
+    uint32_t uvid = GenUintCastCode(vid, new_blk_ptr);
+    newCallOp->AddOperand({ SPV_OPERAND_TYPE_ID, { uvid } });
   }
+  get_def_use_mgr()->AnalyzeInstDefUse(&*newCallOp);
+  (*new_blk_ptr)->AddInstruction(std::move(newCallOp));
 }
 
 bool InstrumentPass::IsSameBlockOp(const Instruction* inst) const {
@@ -679,7 +678,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     output_func_id_ = TakeNextId();
     analysis::TypeManager* type_mgr = context()->get_type_mgr();
     std::vector<const analysis::Type*> param_types;
-    for (uint32_t c = 0; c < param_cnt; ++param_cnt)
+    for (uint32_t c = 0; c < param_cnt; ++c)
       param_types.push_back(type_mgr->GetType(GetUintId()));
     analysis::Function func_ty(type_mgr->GetType(GetVoidId()), param_types);
     analysis::Type* reg_func_ty = type_mgr->GetRegisteredType(&func_ty);
@@ -695,7 +694,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
         std::move(func_inst));
     // Add parameters
     std::vector<uint32_t> param_vec;
-    for (uint32_t c = 0; c < param_cnt; ++param_cnt) {
+    for (uint32_t c = 0; c < param_cnt; ++c) {
       uint32_t pid = TakeNextId();
       param_vec.push_back(pid);
       std::unique_ptr<Instruction> param_inst(
@@ -758,15 +757,15 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
         param_vec[kInstCommonParamFuncIdx], param_vec[kInstCommonParamInstIdx],
         stage_idx, obuf_curr_sz_id, &new_blk_ptr);
     // TODO(greg-lunarg): Add support for all stages
-    uint32_t curr_record_offset = 0;
+    uint32_t stage_offset = 0;
     switch (stage_idx) {
     case SpvExecutionModelFragment:
       GenFragDebugOutputCode(obuf_curr_sz_id, &new_blk_ptr);
-      curr_record_offset = kInstFragOutRecordSize;
+      stage_offset = kInstFragOutRecordSize;
       break;
     case SpvExecutionModelVertex:
       GenVertDebugOutputCode(obuf_curr_sz_id, &new_blk_ptr);
-      curr_record_offset = kInstVertOutRecordSize;
+      stage_offset = kInstVertOutRecordSize;
       break;
     default:
       assert(false && "unsupported stage");
@@ -774,12 +773,8 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     }
     // Gen writes of validation specific data
     for (uint32_t i = 0; i < val_spec_param_cnt; ++i) {
-      uint32_t vid = TakeNextId();
-      AddUnaryOp(GetUintId(), vid, SpvOpLoad,
+      GenDebugOutputFieldCode(obuf_curr_sz_id, stage_offset + i,
           param_vec[kInstCommonOutFunctionIdx + i], &new_blk_ptr);
-      GenDebugOutputFieldCode(obuf_curr_sz_id, curr_record_offset,
-          vid, &new_blk_ptr);
-      ++curr_record_offset;
     }
     // Close write block and gen merge block
     AddBranch(mergeBlkId, &new_blk_ptr);
@@ -794,6 +789,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     get_def_use_mgr()->AnalyzeInstDefUse(&*func_end_inst);
     output_func->SetFunctionEnd(std::move(func_end_inst));
     get_module()->AddFunction(std::move(output_func));
+    output_func_param_cnt_ = param_cnt;
   }
   assert(param_cnt == output_func_param_cnt_ && "bad arg count");
   return output_func_id_;
@@ -821,16 +817,15 @@ bool InstrumentPass::InstProcessCallTreeFromRoots(
   bool modified = false;
   std::unordered_set<uint32_t> done;
 
+  // Process all functions from roots
   while (!roots->empty()) {
     const uint32_t fi = roots->front();
     roots->pop();
     if (done.insert(fi).second) {
-      // Initialize per function variables
-      func_arg_var_ids_.clear();
-      // Process function
       Function* fn = id2function_.at(fi);
-      modified = pfn(fn, stage_idx) || modified;
+      // Add calls first so we don't add new output function
       AddCalls(fn, roots);
+      modified = pfn(fn, stage_idx) || modified;
     }
   }
   return modified;
