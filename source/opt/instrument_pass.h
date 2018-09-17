@@ -48,7 +48,12 @@ class InstrumentPass : public Pass {
   using GetBlocksFunction =
       std::function<std::vector<BasicBlock*>*(const BasicBlock*)>;
 
-  using InstProcessFunction = std::function<bool(Function*, uint32_t)>;
+  using InstProcessFunction = std::function<void(std::vector<std::unique_ptr<BasicBlock>>*,
+    BasicBlock::iterator,
+    UptrVectorIterator<BasicBlock>,
+    uint32_t,
+    uint32_t,
+    uint32_t)>;
 
   virtual ~InstrumentPass() = default;
 
@@ -284,6 +289,13 @@ class InstrumentPass : public Pass {
 
   // Add |var_id| to all entry points if not there.
   void AddVarToEntryPoints(uint32_t var_id);
+
+  // Apply instrumentation function |pfn| to every instruction in |func|.
+  // If code is generated for an instruction, replace the instruction's
+  // block with the new blocks that are generated. Continue processing at the
+  // top of the last new block.
+  bool InstrumentFunction(Function* func, uint32_t stage_idx,
+      InstProcessFunction& pfn);
   
   // Call |pfn| on all functions in the call tree of the function
   // ids in |roots|. 

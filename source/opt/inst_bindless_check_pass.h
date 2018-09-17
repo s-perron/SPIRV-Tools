@@ -44,30 +44,24 @@ class InstBindlessCheckPass : public InstrumentPass {
    // Initialize state for instrumenting bindless checking
    void InitializeInstBindlessCheck();
 
-   // Return in new_blocks the result of instrumenting the bindless reference
-   // at ref_inst_itr within its block at ref_block_itr. The block at
-   // ref_block_itr can just be replaced with the blocks in new_blocks.
-   // new_blocks will contain at least two blocks. The last block will
-   // contain all instructions following the instruction being instrumented.
-   // Note that the first block in new_blocks retains the label
+   // If |ref_inst_itr| is a bindless reference, return in |new_blocks| the
+   // result of instrumenting it with validation code within its block at
+   // |ref_block_itr|. Specifically, generate code to check that the index
+   // into the descriptor array is in-bounds. If the check passes, execute
+   // the remainder of the reference, otherwise write a record to the debug
+   // output buffer and replace the reference with 0. The block at
+   // |ref_block_itr| can just be replaced with the blocks in |new_blocks|,
+   // which will contain at least two blocks. The last block will
+   // contain all instructions following the instruction being instrumented,
+   // preceded by either a phi or copyobject instruction.
+   // Note that the first block in |new_blocks| retains the label
    // of the original calling block.
-   // Also return in new_vars additional OpVariable instructions required by
-   // and to be inserted into the function after the block at
-   // ref_block_itr is replaced with new_blocks.
    void GenBindlessCheckCode(std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
      BasicBlock::iterator ref_inst_itr,
      UptrVectorIterator<BasicBlock> ref_block_itr,
      uint32_t function_idx,
      uint32_t instruction_idx,
      uint32_t stage_idx);
-
-   // Instrument all bindless references in func. Specifically,
-   // generate code to check that the index into the descriptor array is
-   // in-bounds. If Vk_Ext_Descriptor_Indexing is enabled, also check that the
-   // descriptor has been written. If the check passes, execute the remainder
-   // of the reference, otherwise write a record to the debug output buffer
-   // and replace the reference with 0. Return true if func is modified.
-  bool InstBindlessCheck(Function* func, uint32_t stage_idx);
 
   Pass::Status ProcessImpl();
 

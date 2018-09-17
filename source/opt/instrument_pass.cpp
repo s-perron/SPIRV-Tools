@@ -809,6 +809,56 @@ void InstrumentPass::AddVarToEntryPoints(uint32_t var_id) {
   }
 }
 
+bool InstrumentPass::InstrumentFunction(Function* func, uint32_t stage_idx,
+    InstProcessFunction& pfn) {
+  bool modified = false;
+  // Compute function index
+  uint32_t function_idx = 0;
+  for (auto fii = get_module()->begin(); fii != get_module()->end(); ++fii) {
+    if (&*fii == func)
+      break;
+    ++function_idx;
+  }
+  std::vector<std::unique_ptr<BasicBlock>> newBlocks;
+  // Count function instruction
+  uint32_t instruction_idx = 1;
+  // Using block iterators here because of block erasures and insertions.
+  for (auto bi = func->begin(); bi != func->end(); ++bi) {
+    // Count block's label
+    ++instruction_idx;
+    for (auto ii = bi->begin(); ii != bi->end(); ++instruction_idx) {
+      // Bump instruction count if debug instructions
+      instruction_idx += static_cast<uint32_t>(ii->dbg_line_insts().size());
+      // Generate bindless check if warranted
+      pfn(&newBlocks, ii, bi, function_idx, instruction_idx, stage_idx);
+      if (newBlocks.size() == 0) {
+        ++ii;
+        continue;
+      }
+      // If there are new blocks we know there will always be two or
+      // more, so update succeeding phis with label of new last block.
+      size_t newBlocksSize = newBlocks.size();
+      assert(newBlocksSize > 1);
+      UpdateSucceedingPhis(newBlocks);
+      // Replace original block with new block(s).
+      bi = bi.Erase();
+      for (auto& bb : newBlocks) {
+        bb->SetParent(func);
+      }
+      bi = bi.InsertBefore(&newBlocks);
+      // Reset block iterator to last new block
+      for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
+      modified = true;
+      // Restart instrumenting at beginning of last new block,
+      // but skip over any new phi or copy instruction.
+      ii = bi->begin();
+      if (ii->opcode() == SpvOpPhi || ii->opcode() == SpvOpCopyObject) ++ii;
+      newBlocks.clear();
+    }
+  }
+  return modified;
+}
+
 bool InstrumentPass::InstProcessCallTreeFromRoots(
     InstProcessFunction& pfn,
     std::queue<uint32_t>* roots,
@@ -825,7 +875,7 @@ bool InstrumentPass::InstProcessCallTreeFromRoots(
       Function* fn = id2function_.at(fi);
       // Add calls first so we don't add new output function
       AddCalls(fn, roots);
-      modified = pfn(fn, stage_idx) || modified;
+      modified = InstrumentFunction(fn, stage_idx, pfn) || modified;
     }
   }
   return modified;

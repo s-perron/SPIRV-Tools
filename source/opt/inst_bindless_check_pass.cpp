@@ -256,56 +256,6 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   new_blocks->push_back(std::move(new_blk_ptr));
 }
 
-bool InstBindlessCheckPass::InstBindlessCheck(Function* func, uint32_t stage_idx) {
-  bool modified = false;
-  // Compute function index
-  uint32_t function_idx = 0;
-  for (auto fii = get_module()->begin(); fii != get_module()->end(); ++fii) {
-    if (&*fii == func)
-      break;
-    ++function_idx;
-  }
-  std::vector<std::unique_ptr<BasicBlock>> newBlocks;
-  // Count function instruction
-  uint32_t instruction_idx = 1;
-  // Using block iterators here because of block erasures and insertions.
-  for (auto bi = func->begin(); bi != func->end(); ++bi) {
-    // Count block's label
-    ++instruction_idx;
-    for (auto ii = bi->begin(); ii != bi->end(); ++instruction_idx) {
-      // Bump instruction count if debug instructions
-      instruction_idx += static_cast<uint32_t>(ii->dbg_line_insts().size());
-      // Generate bindless check if warranted
-      GenBindlessCheckCode(&newBlocks, ii, bi, function_idx,
-          instruction_idx, stage_idx);
-      if (newBlocks.size() == 0) {
-        ++ii;
-        continue;
-      }
-      // If there are new blocks we know there will always be two or
-      // more, so update succeeding phis with label of new last block.
-      size_t newBlocksSize = newBlocks.size();
-      assert(newBlocksSize > 1);
-      UpdateSucceedingPhis(newBlocks);
-      // Replace original block with new block(s).
-      bi = bi.Erase();
-      for (auto& bb : newBlocks) {
-        bb->SetParent(func);
-      }
-      bi = bi.InsertBefore(&newBlocks);
-      // Reset block iterator to last new block
-      for (size_t i = 0; i < newBlocksSize - 1; i++) ++bi;
-      modified = true;
-      // Restart instrumenting at beginning of last new block,
-      // but skip over any new phi or copy instruction.
-      ii = bi->begin();
-      if (ii->opcode() == SpvOpPhi || ii->opcode() == SpvOpCopyObject) ++ii;
-      newBlocks.clear();
-    }
-  }
-  return modified;
-}
-
 void InstBindlessCheckPass::InitializeInstBindlessCheck() {
   // Initialize base class
   InitializeInstrument(kInstValidationIdBindless);
@@ -323,8 +273,15 @@ void InstBindlessCheckPass::InitializeInstBindlessCheck() {
 
 Pass::Status InstBindlessCheckPass::ProcessImpl() {
   // Perform instrumentation on each entry point function in module
-  InstProcessFunction pfn = [this](Function* fp, uint32_t stage_idx) { 
-      return InstBindlessCheck(fp, stage_idx); };
+  InstProcessFunction pfn = [this](
+      std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+      BasicBlock::iterator ref_inst_itr,
+      UptrVectorIterator<BasicBlock> ref_block_itr,
+      uint32_t function_idx,
+      uint32_t instruction_idx,
+      uint32_t stage_idx) {
+    return GenBindlessCheckCode(new_blocks, ref_inst_itr, ref_block_itr,
+        function_idx, instruction_idx, stage_idx); };
   bool modified = InstProcessEntryPointCallTree(pfn, get_module());
   // This pass does not update def/use info
   context()->InvalidateAnalyses(IRContext::kAnalysisDefUse);
