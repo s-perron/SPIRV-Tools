@@ -283,8 +283,6 @@ Pass::Status InstBindlessCheckPass::ProcessImpl() {
     return GenBindlessCheckCode(new_blocks, ref_inst_itr, ref_block_itr,
         function_idx, instruction_idx, stage_idx); };
   bool modified = InstProcessEntryPointCallTree(pfn, get_module());
-  // This pass does not update def/use info
-  context()->InvalidateAnalyses(IRContext::kAnalysisDefUse);
   // TODO(greg-lunarg): If modified, do CFGCleanup, DCE
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
