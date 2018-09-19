@@ -40,7 +40,28 @@ static const uint32_t kDebugInputBindingBindless = 1;
 namespace spvtools {
 namespace opt {
 
-// See optimizer.hpp for documentation.
+// This is a base class to assist in the creation of passes which instrument
+// modules. More specifically, passes which replace instructions with a larger
+// and more capable set of instructions. Commonly, these new instructions will
+// add testing of operands and execute different instructions depending on the
+// outcome, including outputting of a debug record into a buffer created
+// especially for that purpose.
+//
+// This class contains helper functions to create an InstProcessFunction,
+// which is the heart of any derived class implementing a specific
+// instrumentation pass. It takes an instruction as an argument, decides
+// if it should be instrumented, and generates code to replace it. This class
+// also supplies function InstProcessEntryPointCallTree which applies the
+// InstProcessFunction to every reachable instruction in a module and replaces
+// the instruction with new instructions if generated.
+//
+// One of the main helper functions supplied is GenDebugOutputCode, which
+// generates code to write a debug output record along with code to test if
+// space remains in the debug output buffer. The record contains three
+// subsections: members common across all validation, members specific to
+// the stage and members specific to a validation. These are enumerated
+// using static const offsets in the .cpp file.
+
 class InstrumentPass : public Pass {
   using cbb_ptr = const BasicBlock*;
 
@@ -86,7 +107,7 @@ class InstrumentPass : public Pass {
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Generate instructions which will write a record to the end of the debug
-  // output buffer for the current shader.
+  // output buffer for the current shader if enough space remains.
   void GenDebugOutputCode(
     uint32_t func_idx,
     uint32_t instruction_idx,
