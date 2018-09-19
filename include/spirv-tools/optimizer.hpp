@@ -652,12 +652,17 @@ Optimizer::PassToken CreateCombineAccessChainsPass();
 
 // Create a pass to instrument bindless descriptor checking
 // This pass instruments all bindless references to check that descriptor array
-// indices are inbounds and that the descriptor is valid, where applicable.
-// Dead code elimination should be run after this pass as dead code could be
-// created if any instrumentation occurs. The instrumentation will read and
-// write buffers in debug descriptor set |desc_set|. It will write |shader_id|
-// in each output record to identify the shader module which generated the
-// record.
+// indices are inbounds and that the descriptor is initialized, where applicable.
+// If the reference is invalid, a record is written to the debug output buffer
+// (if space allows) and a null value is returned.
+//
+// Dead code elimination should be run after this pass as the original,
+// potentially invalid code is not removed and could cause undefined behavior,
+// including crashes.
+//
+// The instrumentation will read and write buffers in debug
+// descriptor set |desc_set|. It will write |shader_id| in each output record
+// to identify the shader module which generated the record.
 Optimizer::PassToken CreateInstBindlessCheckPass(uint32_t desc_set,
   uint32_t shader_id);
 
