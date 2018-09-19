@@ -34,7 +34,7 @@ namespace opt {
 class InstBindlessCheckPass : public InstrumentPass {
  public:
    InstBindlessCheckPass(uint32_t desc_set, uint32_t shader_id)
-     : InstrumentPass(desc_set, shader_id) {}
+     : InstrumentPass(desc_set, shader_id, kInstValidationIdBindless) {}
 
   Status Process() override;
 

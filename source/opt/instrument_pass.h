@@ -59,11 +59,12 @@ class InstrumentPass : public Pass {
   // Create instrumentation pass which utilizes descriptor set |desc_set|
   // for debug input and output buffers and writes |shader_id| into debug
   // output records.
-  InstrumentPass(uint32_t desc_set, uint32_t shader_id) :
-    desc_set_(desc_set), shader_id_(shader_id) {}
+  InstrumentPass(uint32_t desc_set, uint32_t shader_id,
+      uint32_t validation_id) : desc_set_(desc_set), shader_id_(shader_id),
+      validation_id_(validation_id) {}
 
   // Initialize state for instrumentation of module by |validation_id|.
-  void InitializeInstrument(uint32_t validation_id);
+  void InitializeInstrument();
 
   // Call |pfn| on all instructions in all functions in the call tree of the
   // entry points in |module|. If code is generated for an instruction, replace

@@ -918,8 +918,7 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
   return modified;
 }
 
-void InstrumentPass::InitializeInstrument(uint32_t validation_id) {
-  validation_id_ = validation_id;
+void InstrumentPass::InitializeInstrument() {
   output_buffer_id_ = 0;
   output_buffer_uint_ptr_id_ = 0;
   output_func_id_ = 0;

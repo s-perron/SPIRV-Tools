@@ -258,7 +258,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
 
 void InstBindlessCheckPass::InitializeInstBindlessCheck() {
   // Initialize base class
-  InitializeInstrument(kInstValidationIdBindless);
+  InitializeInstrument();
   // Look for related extensions
   ext_descriptor_indexing_defined_ = false;
   for (auto& ei : get_module()->extensions()) {
