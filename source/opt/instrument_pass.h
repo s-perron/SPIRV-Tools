@@ -45,21 +45,33 @@ class InstrumentPass : public Pass {
   using cbb_ptr = const BasicBlock*;
 
  public:
-  using GetBlocksFunction =
-      std::function<std::vector<BasicBlock*>*(const BasicBlock*)>;
-
-  using InstProcessFunction = std::function<void(std::vector<std::unique_ptr<BasicBlock>>*,
+  using InstProcessFunction = std::function<void(
     BasicBlock::iterator,
     UptrVectorIterator<BasicBlock>,
     uint32_t,
     uint32_t,
-    uint32_t)>;
+    uint32_t,
+    std::vector<std::unique_ptr<BasicBlock>>*)>;
 
   virtual ~InstrumentPass() = default;
 
  protected:
+  // Create instrumentation pass which utilizes descriptor set |desc_set|
+  // for debug input and output buffers and writes |shader_id| into debug
+  // output records.
   InstrumentPass(uint32_t desc_set, uint32_t shader_id) :
     desc_set_(desc_set), shader_id_(shader_id) {}
+
+  // Initialize state for instrumentation of module by |validation_id|.
+  void InitializeInstrument(uint32_t validation_id);
+
+  // Call |pfn| on all instructions in all functions in the call tree of the
+  // entry points in |module|. If code is generated for an instruction, replace
+  // the instruction's block with the new blocks that are generated. Continue
+  // processing at the top of the last new block.
+  bool InstProcessEntryPointCallTree(
+    InstProcessFunction& pfn,
+    Module* module);
 
   // Move all code in |ref_block_itr| preceding the instruction |ref_inst_itr|
   // to be instrumented into block |new_blk_ptr|.
@@ -72,66 +84,6 @@ class InstrumentPass : public Pass {
   void MovePostludeCode(UptrVectorIterator<BasicBlock> ref_block_itr,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
-  // Return id for unsigned int constant value |u|.
-  uint32_t GetUintConstantId(uint32_t u);
-
-  // Gen code into |new_blk_ptr| to write |field_value_id| into debug output
-  // buffer at |base_offset_id| + |field_offset|.
-  void GenDebugOutputFieldCode(
-    uint32_t base_offset_id,
-    uint32_t field_offset,
-    uint32_t field_value_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
-
-  // Generate instructions into |new_blk_ptr| which will write the members
-  // of the debug output buffer common for all stages and validations at
-  // |base_off|.
-  void GenCommonDebugOutputCode(
-    uint32_t record_sz,
-    uint32_t func_idx,
-    uint32_t instruction_idx,
-    uint32_t stage_idx,
-    uint32_t base_off,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
-
-  // Generate instructions into |new_blk_ptr| which will write
-  // |uint_frag_coord_id| at |component| of the record at |base_off| of
-  // the debug output buffer .
-  void GenFragCoordEltDebugOutputCode(
-    uint32_t base_offset_id,
-    uint32_t uint_frag_coord_id,
-    uint32_t component,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
-
-  // Generate instructions into |new_blk_ptr| which will write the vertex-
-  // shader-specific members of the debug output buffer at |base_off|.
-  void GenBuiltinIdOutputCode(
-    uint32_t builtinId,
-    uint32_t builtinOff,
-    uint32_t base_off,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
-
-  // Generate instructions into |new_blk_ptr| which will write the vertex-
-  // shader-specific members of the debug output buffer at |base_off|.
-  void GenVertDebugOutputCode(
-    uint32_t base_off,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
-
-  // Generate instructions into |new_blk_ptr| which will write the fragment-
-  // shader-specific members of the debug output buffer at |base_off|.
-  void GenFragDebugOutputCode(
-    uint32_t base_off,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
-
-  // Return size of common and stage-specific output record members
-  uint32_t GetStageOutputRecordSize(uint32_t stage_idx);
-
-  // Generate code to cast |value_id| to unsigned, if needed. Return
-  // an id to the unsigned equivalent.
-  uint32_t GenUintCastCode(
-    uint32_t value_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
-
   // Generate instructions which will write a record to the end of the debug
   // output buffer for the current shader.
   void GenDebugOutputCode(
@@ -140,6 +92,15 @@ class InstrumentPass : public Pass {
     uint32_t stage_idx,
     const std::vector<uint32_t> &validation_ids,
     std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Return id for unsigned int constant value |u|.
+  uint32_t GetUintConstantId(uint32_t u);
+
+  // Generate code to cast |value_id| to unsigned, if needed. Return
+  // an id to the unsigned equivalent.
+  uint32_t GenUintCastCode(
+    uint32_t value_id,
     std::unique_ptr<BasicBlock>* new_blk_ptr);
 
   // Add nullary instruction |type_id, result_id, opcode| to
@@ -228,23 +189,6 @@ class InstrumentPass : public Pass {
   // Returns the id for the null constant value of |type_id|.
   uint32_t GetNullId(uint32_t type_id);
 
-  // Return true if instruction must be in the same block that its result
-  // is used.
-  bool IsSameBlockOp(const Instruction* inst) const;
-
-  // Clone operands which must be in same block as consumer instructions.
-  // Look in preCallSB for instructions that need cloning. Look in
-  // postCallSB for instructions already cloned. Add cloned instruction
-  // to postCallSB.
-  void CloneSameBlockOps(std::unique_ptr<Instruction>* inst,
-                         std::unordered_map<uint32_t, uint32_t>* postCallSB,
-                         std::unordered_map<uint32_t, Instruction*>* preCallSB,
-                         std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Update phis in succeeding blocks to point to new last block
-  void UpdateSucceedingPhis(
-      std::vector<std::unique_ptr<BasicBlock>>& new_blocks);
-
   // Return id for 32-bit unsigned type
   uint32_t GetUintId();
 
@@ -304,14 +248,73 @@ class InstrumentPass : public Pass {
     std::queue<uint32_t>* roots,
     uint32_t stage_idx);
 
-  // Call |pfn| on all functions in the call tree of the entry points
-  // in |module|.
-  bool InstProcessEntryPointCallTree(
-    InstProcessFunction& pfn,
-    Module* module);
+  // Gen code into |new_blk_ptr| to write |field_value_id| into debug output
+  // buffer at |base_offset_id| + |field_offset|.
+  void GenDebugOutputFieldCode(
+    uint32_t base_offset_id,
+    uint32_t field_offset,
+    uint32_t field_value_id,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
 
-  // Initialize state for optimization of module
-  void InitializeInstrument(uint32_t validation_id);
+  // Generate instructions into |new_blk_ptr| which will write the members
+  // of the debug output record common for all stages and validations at
+  // |base_off|.
+  void GenCommonDebugOutputCode(
+    uint32_t record_sz,
+    uint32_t func_idx,
+    uint32_t instruction_idx,
+    uint32_t stage_idx,
+    uint32_t base_off,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Generate instructions into |new_blk_ptr| which will write
+  // |uint_frag_coord_id| at |component| of the record at |base_offset_id| of
+  // the debug output buffer .
+  void GenFragCoordEltDebugOutputCode(
+    uint32_t base_offset_id,
+    uint32_t uint_frag_coord_id,
+    uint32_t component,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Generate instructions into |new_blk_ptr| which will write the vertex-
+  // shader-specific members of the debug output buffer at |base_off|.
+  void GenBuiltinIdOutputCode(
+    uint32_t builtin_id,
+    uint32_t builtin_off,
+    uint32_t base_off,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Generate instructions into |new_blk_ptr| which will write the vertex-
+  // shader-specific members of the debug output buffer at |base_off|.
+  void GenVertDebugOutputCode(
+    uint32_t base_off,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Generate instructions into |new_blk_ptr| which will write the fragment-
+  // shader-specific members of the debug output buffer at |base_off|.
+  void GenFragDebugOutputCode(
+    uint32_t base_off,
+    std::unique_ptr<BasicBlock>* new_blk_ptr);
+
+  // Return size of common and stage-specific output record members
+  uint32_t GetStageOutputRecordSize(uint32_t stage_idx);
+
+  // Return true if instruction must be in the same block that its result
+  // is used.
+  bool IsSameBlockOp(const Instruction* inst) const;
+
+  // Clone operands which must be in same block as consumer instructions.
+  // Look in preCallSB for instructions that need cloning. Look in
+  // postCallSB for instructions already cloned. Add cloned instruction
+  // to postCallSB.
+  void CloneSameBlockOps(std::unique_ptr<Instruction>* inst,
+    std::unordered_map<uint32_t, uint32_t>* postCallSB,
+    std::unordered_map<uint32_t, Instruction*>* preCallSB,
+    std::unique_ptr<BasicBlock>* block_ptr);
+
+  // Update phis in succeeding blocks to point to new last block
+  void UpdateSucceedingPhis(
+    std::vector<std::unique_ptr<BasicBlock>>& new_blocks);
 
   // Debug descriptor set index
   uint32_t desc_set_;

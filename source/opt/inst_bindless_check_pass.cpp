@@ -38,12 +38,12 @@ namespace spvtools {
 namespace opt {
 
 void InstBindlessCheckPass::GenBindlessCheckCode(
-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
     BasicBlock::iterator ref_inst_itr,
     UptrVectorIterator<BasicBlock> ref_block_itr,
     uint32_t function_idx,
     uint32_t instruction_idx,
-    uint32_t stage_idx) {
+    uint32_t stage_idx,
+  std::vector<std::unique_ptr<BasicBlock>>* new_blocks) {
   // Look for reference through bindless descriptor. If not, return.
   std::unique_ptr<BasicBlock> new_blk_ptr;
   uint32_t imageId;
@@ -136,7 +136,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     return;
   // If index and bound both compile-time constants and index >= bound,
   // generate debug output error code and use zero as referenced value.
-  uint32_t error_id = GetUintConstantId(kInstErrorBindlessBounds);
+  uint32_t errorId = GetUintConstantId(kInstErrorBindlessBounds);
   uint32_t lengthId =
     ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
   Instruction* lengthInst = get_def_use_mgr()->GetDef(lengthId);
@@ -147,25 +147,25 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
       return;
     MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
     GenDebugOutputCode(function_idx, instruction_idx,
-        stage_idx, { error_id, indexId, lengthId }, new_blocks, &new_blk_ptr);
+        stage_idx, { errorId, indexId, lengthId }, new_blocks, &new_blk_ptr);
     // Calling routine expects at least two blocks and will restart analysis
     // in last block. If no new blocks generated, close this block and start
     // new block.
     if (new_blocks->size() == 0) {
-      uint32_t next_label_id = TakeNextId();
-      std::unique_ptr<Instruction> nextLabel(NewLabel(next_label_id));
-      AddBranch(next_label_id, &new_blk_ptr);
+      uint32_t nextLabelId = TakeNextId();
+      std::unique_ptr<Instruction> nextLabel(NewLabel(nextLabelId));
+      AddBranch(nextLabelId, &new_blk_ptr);
       new_blocks->push_back(std::move(new_blk_ptr));
       new_blk_ptr.reset(new BasicBlock(std::move(nextLabel)));
     }
     // Set the original reference id to zero, if it exists. Kill original
     // reference before reusing id.
-    uint32_t ref_type_id = ref_inst_itr->type_id();
-    uint32_t ref_result_id = ref_inst_itr->result_id();
+    uint32_t refTypeId = ref_inst_itr->type_id();
+    uint32_t refResultId = ref_inst_itr->result_id();
     context()->KillInst(&*ref_inst_itr);
-    if (ref_result_id != 0) {
-      uint32_t nullId = GetNullId(ref_type_id);
-      AddUnaryOp(ref_type_id, ref_result_id, SpvOpCopyObject,
+    if (refResultId != 0) {
+      uint32_t nullId = GetNullId(refTypeId);
+      AddUnaryOp(refTypeId, refResultId, SpvOpCopyObject,
           nullId, &new_blk_ptr);
     }
   }
@@ -213,9 +213,9 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     }
     // Clone original reference using new image code
     std::unique_ptr<Instruction> newRefInst(ref_inst_itr->Clone(context()));
-    uint32_t ref_result_id = ref_inst_itr->result_id();
+    uint32_t refResultId = ref_inst_itr->result_id();
     uint32_t newRefId = 0;
-    if (ref_result_id != 0) {
+    if (refResultId != 0) {
       newRefId = TakeNextId();
       newRefInst->SetResultId(newRefId);
     }
@@ -224,21 +224,21 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     get_def_use_mgr()->AnalyzeInstDefUse(&*newRefInst);
     new_blk_ptr->AddInstruction(std::move(newRefInst));
     if (newRefId != 0)
-      get_decoration_mgr()->CloneDecorations(ref_result_id, newRefId);
+      get_decoration_mgr()->CloneDecorations(refResultId, newRefId);
     // Close valid block and gen invalid block
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
     new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
     GenDebugOutputCode(function_idx, instruction_idx,
-        stage_idx, { error_id, indexId, lengthId }, new_blocks,
+        stage_idx, { errorId, indexId, lengthId }, new_blocks,
         &new_blk_ptr);
     // Remember last invalid block id
     uint32_t lastInvalidBlkId = new_blk_ptr->GetLabelInst()->result_id();
     // Gen zero for invalid  reference
-    uint32_t ref_type_id = ref_inst_itr->type_id();
+    uint32_t refTypeId = ref_inst_itr->type_id();
     uint32_t nullId = 0;
     if (newRefId != 0)
-      nullId = GetNullId(ref_type_id);
+      nullId = GetNullId(refTypeId);
     // Close invalid block and gen merge block
     AddBranch(mergeBlkId, &new_blk_ptr);
     new_blocks->push_back(std::move(new_blk_ptr));
@@ -248,7 +248,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     // reference before reusing its id.
     context()->KillInst(&*ref_inst_itr);
     if (newRefId != 0)
-      AddPhi(ref_type_id, ref_result_id, newRefId, validBlkId,
+      AddPhi(refTypeId, refResultId, newRefId, validBlkId,
           nullId, lastInvalidBlkId, &new_blk_ptr);
   }
   MovePostludeCode(ref_block_itr, &new_blk_ptr);
@@ -274,16 +274,16 @@ void InstBindlessCheckPass::InitializeInstBindlessCheck() {
 Pass::Status InstBindlessCheckPass::ProcessImpl() {
   // Perform instrumentation on each entry point function in module
   InstProcessFunction pfn = [this](
-      std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
       BasicBlock::iterator ref_inst_itr,
       UptrVectorIterator<BasicBlock> ref_block_itr,
       uint32_t function_idx,
       uint32_t instruction_idx,
-      uint32_t stage_idx) {
-    return GenBindlessCheckCode(new_blocks, ref_inst_itr, ref_block_itr,
-        function_idx, instruction_idx, stage_idx); };
+      uint32_t stage_idx,
+    std::vector<std::unique_ptr<BasicBlock>>* new_blocks) {
+    return GenBindlessCheckCode(ref_inst_itr, ref_block_itr,
+        function_idx, instruction_idx, stage_idx, new_blocks); };
   bool modified = InstProcessEntryPointCallTree(pfn, get_module());
-  // TODO(greg-lunarg): If modified, do CFGCleanup, DCE
+  // TODO(greg-lunarg): If modified, do CFGCleanup
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
 

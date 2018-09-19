@@ -49,19 +49,22 @@ class InstBindlessCheckPass : public InstrumentPass {
    // |ref_block_itr|. Specifically, generate code to check that the index
    // into the descriptor array is in-bounds. If the check passes, execute
    // the remainder of the reference, otherwise write a record to the debug
-   // output buffer and replace the reference with 0. The block at
+   // output buffer including |function_idx, instruction_idx, stage_idx|
+   // and replace the reference with 0. The block at
    // |ref_block_itr| can just be replaced with the blocks in |new_blocks|,
    // which will contain at least two blocks. The last block will
-   // contain all instructions following the instruction being instrumented,
+   // comprise all instructions following |ref_inst_itr|,
    // preceded by either a phi or copyobject instruction.
    // Note that the first block in |new_blocks| retains the label
-   // of the original calling block.
-   void GenBindlessCheckCode(std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
+   // of the original calling block and the original result id will
+   // still contain the final result of the instrumented operation.
+   void GenBindlessCheckCode(
      BasicBlock::iterator ref_inst_itr,
      UptrVectorIterator<BasicBlock> ref_block_itr,
      uint32_t function_idx,
      uint32_t instruction_idx,
-     uint32_t stage_idx);
+     uint32_t stage_idx,
+     std::vector<std::unique_ptr<BasicBlock>>* new_blocks);
 
   Pass::Status ProcessImpl();
 

@@ -830,7 +830,7 @@ bool InstrumentPass::InstrumentFunction(Function* func, uint32_t stage_idx,
       // Bump instruction count if debug instructions
       instruction_idx += static_cast<uint32_t>(ii->dbg_line_insts().size());
       // Generate bindless check if warranted
-      pfn(&newBlocks, ii, bi, function_idx, instruction_idx, stage_idx);
+      pfn(ii, bi, function_idx, instruction_idx, stage_idx, &newBlocks);
       if (newBlocks.size() == 0) {
         ++ii;
         continue;
