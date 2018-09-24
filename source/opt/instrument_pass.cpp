@@ -751,6 +751,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     AddSelectionMerge(mergeBlkId, SpvSelectionControlMaskNone, &new_blk_ptr);
     AddBranchCond(obuf_safe_id, writeBlkId, mergeBlkId, &new_blk_ptr);
     // Close safety test block and gen write block
+    new_blk_ptr->SetParent(&*output_func);
     output_func->AddBasicBlock(std::move(new_blk_ptr));
     new_blk_ptr = MakeUnique<BasicBlock>(std::move(writeLabel));
     GenCommonDebugOutputCode(obuf_record_sz,
@@ -778,10 +779,12 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     }
     // Close write block and gen merge block
     AddBranch(mergeBlkId, &new_blk_ptr);
+    new_blk_ptr->SetParent(&*output_func);
     output_func->AddBasicBlock(std::move(new_blk_ptr));
     new_blk_ptr = MakeUnique<BasicBlock>(std::move(mergeLabel));
     // Close merge block and function and add function to module
     AddNullaryOp(0, 0, SpvOpReturn, &new_blk_ptr);
+    new_blk_ptr->SetParent(&*output_func);
     output_func->AddBasicBlock(std::move(new_blk_ptr));
     std::unique_ptr<Instruction> func_end_inst(
         new Instruction(get_module()->context(), SpvOpFunctionEnd,
