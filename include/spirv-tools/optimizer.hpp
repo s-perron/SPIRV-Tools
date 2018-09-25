@@ -658,9 +658,14 @@ Optimizer::PassToken CreateCombineAccessChainsPass();
 //
 // Dead code elimination should be run after this pass as the original,
 // potentially invalid code is not removed and could cause undefined behavior,
-// including crashes. It is generally recommended that this pass (and all
+// including crashes. It may also be beneficial to run Simplification
+// (ie Constant Propagation), DeadBranchElim and BlockMerge after this pass to
+// optimize instrument code involving the testing of compile-time constants.
+// It is also generally recommended that this pass (and all
 // instrumentation passes) be run after any legalization and optimization
-// passes.
+// passes. This will give better analysis for the instrumentation and avoid
+// potentially de-optimizing the instrument code, for example, inlining
+// the debug record output function throughout the module.
 //
 // The instrumentation will read and write buffers in debug
 // descriptor set |desc_set|. It will write |shader_id| in each output record
