@@ -103,7 +103,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
     imageId = 0;
   }
   if (loadInst->opcode() != SpvOp::SpvOpLoad) {
-    assert(false && "expected image load");
+    // TODO(greg-lunarg): Handle additional possibilities
     return;
   }
   uint32_t ptrId = loadInst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
