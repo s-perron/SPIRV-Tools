@@ -153,31 +153,31 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   std::unique_ptr<Instruction> mergeLabel(NewLabel(mergeBlkId));
   std::unique_ptr<Instruction> validLabel(NewLabel(validBlkId));
   std::unique_ptr<Instruction> invalidLabel(NewLabel(invalidBlkId));
-  AddSelectionMerge(mergeBlkId, SpvSelectionControlMaskNone, &new_blk_ptr);
-  AddBranchCond(ult_inst->result_id(), validBlkId, invalidBlkId, &new_blk_ptr);
+  (void) builder.AddConditionalBranch(ult_inst->result_id(), validBlkId,
+      invalidBlkId, mergeBlkId, SpvSelectionControlMaskNone);
   // Close selection block and gen valid reference block
   new_blocks->push_back(std::move(new_blk_ptr));
   new_blk_ptr.reset(new BasicBlock(std::move(validLabel)));
+  builder.SetInsertPoint(&*new_blk_ptr);
   // Clone descriptor load
-  std::unique_ptr<Instruction> newLoadInst(loadInst->Clone(context()));
-  uint32_t newLoadId = TakeNextId();
-  newLoadInst->SetResultId(newLoadId);
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newLoadInst);
-  new_blk_ptr->AddInstruction(std::move(newLoadInst));
+  Instruction* newLoadInst = builder.AddLoad(loadInst->type_id(),
+      loadInst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx));
+  uint32_t newLoadId = newLoadInst->result_id();
   get_decoration_mgr()->CloneDecorations(loadInst->result_id(), newLoadId);
   uint32_t newImageId = newLoadId;
   // Clone Image/SampledImage with new load, if needed
   if (imageId != 0) {
-    newImageId = TakeNextId();
     if (imageInst->opcode() == SpvOp::SpvOpSampledImage) {
-      AddBinaryOp(imageInst->type_id(), newImageId, SpvOpSampledImage,
-        newLoadId, imageInst->GetSingleWordInOperand(
-          kSpvSampledImageSamplerIdInIdx), &new_blk_ptr);
+      Instruction* newImageInst = builder.AddBinaryOp(imageInst->type_id(),
+          SpvOpSampledImage, newLoadId, imageInst->GetSingleWordInOperand(
+              kSpvSampledImageSamplerIdInIdx));
+      newImageId = newImageInst->result_id();
     }
     else {
       assert(imageInst->opcode() == SpvOp::SpvOpImage && "expecting OpImage");
-      AddUnaryOp(imageInst->type_id(), newImageId, SpvOpImage,
-        newLoadId, &new_blk_ptr);
+      Instruction* newImageInst = builder.AddUnaryOp(imageInst->type_id(),
+          SpvOpImage, newLoadId);
+      newImageId = newImageInst->result_id();
     }
     get_decoration_mgr()->CloneDecorations(imageId, newImageId);
   }
@@ -196,12 +196,14 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   if (newRefId != 0)
     get_decoration_mgr()->CloneDecorations(refResultId, newRefId);
   // Close valid block and gen invalid block
-  AddBranch(mergeBlkId, &new_blk_ptr);
+  (void) builder.AddBranch(mergeBlkId);
   new_blocks->push_back(std::move(new_blk_ptr));
   new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
+  builder.SetInsertPoint(&*new_blk_ptr);
   GenDebugOutputCode(function_idx, instruction_idx,
       stage_idx, { errorId, indexId, lengthId }, new_blocks,
       &new_blk_ptr);
+  builder.SetInsertPoint(&*new_blk_ptr);
   // Remember last invalid block id
   uint32_t lastInvalidBlkId = new_blk_ptr->GetLabelInst()->result_id();
   // Gen zero for invalid  reference
@@ -210,16 +212,17 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   if (newRefId != 0)
     nullId = GetNullId(refTypeId);
   // Close invalid block and gen merge block
-  AddBranch(mergeBlkId, &new_blk_ptr);
+  (void) builder.AddBranch(mergeBlkId);
   new_blocks->push_back(std::move(new_blk_ptr));
   new_blk_ptr.reset(new BasicBlock(std::move(mergeLabel)));
+  builder.SetInsertPoint(&*new_blk_ptr);
   // Gen phi of new reference and zero, if necessary. Use result id of
   // original reference so we don't have to do a replace. Kill original
   // reference before reusing its id.
   context()->KillInst(&*ref_inst_itr);
   if (newRefId != 0)
-    AddPhi(refTypeId, refResultId, newRefId, validBlkId,
-        nullId, lastInvalidBlkId, &new_blk_ptr);
+    (void) builder.AddPhi(refTypeId,
+        { newRefId, validBlkId, nullId, lastInvalidBlkId }, refResultId);
   MovePostludeCode(ref_block_itr, &new_blk_ptr);
   // Add remainder/merge block to new blocks
   new_blocks->push_back(std::move(new_blk_ptr));

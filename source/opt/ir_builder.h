@@ -58,6 +58,14 @@ class InstructionBuilder {
       : InstructionBuilder(context, parent_block, parent_block->end(),
                            preserved_analyses) {}
 
+  Instruction* AddUnaryOp(uint32_t type_id, SpvOp opcode, uint32_t operand1) {
+    std::unique_ptr<Instruction> newUnOp(
+      new Instruction(GetContext(), opcode, type_id,
+        GetContext()->TakeNextId(),
+        { { spv_operand_type_t::SPV_OPERAND_TYPE_ID, { operand1 } } }));
+    return AddInstruction(std::move(newUnOp));
+  }
+
   Instruction* AddBinaryOp(uint32_t type_id, SpvOp opcode, uint32_t operand1,
       uint32_t operand2) {
     std::unique_ptr<Instruction> newBinOp(
@@ -163,14 +171,16 @@ class InstructionBuilder {
   // The id |type| must be the id of the phi instruction's type.
   // The vector |incomings| must be a sequence of pairs of <definition id,
   // parent id>.
-  Instruction* AddPhi(uint32_t type, const std::vector<uint32_t>& incomings) {
+  Instruction* AddPhi(uint32_t type, const std::vector<uint32_t>& incomings,
+      uint32_t result = 0) {
     assert(incomings.size() % 2 == 0 && "A sequence of pairs is expected");
     std::vector<Operand> phi_ops;
     for (size_t i = 0; i < incomings.size(); i++) {
       phi_ops.push_back({SPV_OPERAND_TYPE_ID, {incomings[i]}});
     }
     std::unique_ptr<Instruction> phi_inst(new Instruction(
-        GetContext(), SpvOpPhi, type, GetContext()->TakeNextId(), phi_ops));
+        GetContext(), SpvOpPhi, type,
+        result != 0 ? result : GetContext()->TakeNextId(), phi_ops));
     return AddInstruction(std::move(phi_inst));
   }
 
