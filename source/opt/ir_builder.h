@@ -58,6 +58,16 @@ class InstructionBuilder {
       : InstructionBuilder(context, parent_block, parent_block->end(),
                            preserved_analyses) {}
 
+  Instruction* AddBinaryOp(uint32_t type_id, SpvOp opcode, uint32_t operand1,
+      uint32_t operand2) {
+    std::unique_ptr<Instruction> newBinOp(
+      new Instruction(GetContext(), opcode, type_id,
+          GetContext()->TakeNextId(),
+          { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+            { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
+    return AddInstruction(std::move(newBinOp));
+  }
+
   // Creates a new selection merge instruction.
   // The id |merge_id| is the merge basic block id.
   Instruction* AddSelectionMerge(

@@ -16,6 +16,8 @@
 
 #include "inst_bindless_check_pass.h"
 
+#include "source/opt/ir_builder.h"
+
 // Input Operand Indices
 static const int kSpvImageSampleImageIdInIdx = 0;
 static const int kSpvSampledImageImageIdInIdx = 0;
@@ -141,9 +143,10 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   // being full reference and false branch being debug output and zero
   // for the referenced value.
   MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-  uint32_t ultId = TakeNextId();
-  AddBinaryOp(GetBoolId(), ultId, SpvOpULessThan, indexId,
-      lengthId, &new_blk_ptr);
+  InstructionBuilder builder(context(), &*new_blk_ptr,
+      IRContext::kAnalysisDefUse);
+  Instruction* ult_inst = builder.AddBinaryOp(GetBoolId(), SpvOpULessThan,
+      indexId, lengthId);
   uint32_t mergeBlkId = TakeNextId();
   uint32_t validBlkId = TakeNextId();
   uint32_t invalidBlkId = TakeNextId();
@@ -151,7 +154,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   std::unique_ptr<Instruction> validLabel(NewLabel(validBlkId));
   std::unique_ptr<Instruction> invalidLabel(NewLabel(invalidBlkId));
   AddSelectionMerge(mergeBlkId, SpvSelectionControlMaskNone, &new_blk_ptr);
-  AddBranchCond(ultId, validBlkId, invalidBlkId, &new_blk_ptr);
+  AddBranchCond(ult_inst->result_id(), validBlkId, invalidBlkId, &new_blk_ptr);
   // Close selection block and gen valid reference block
   new_blocks->push_back(std::move(new_blk_ptr));
   new_blk_ptr.reset(new BasicBlock(std::move(validLabel)));
@@ -249,7 +252,8 @@ Pass::Status InstBindlessCheckPass::ProcessImpl() {
     return GenBindlessCheckCode(ref_inst_itr, ref_block_itr,
         function_idx, instruction_idx, stage_idx, new_blocks); };
   bool modified = InstProcessEntryPointCallTree(pfn, get_module());
-  // TODO(greg-lunarg): If modified, do CFGCleanup
+  // This pass does not update inst->blk info
+  context()->InvalidateAnalyses(IRContext::kAnalysisInstrToBlockMapping);
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
 

@@ -18,6 +18,8 @@
 
 #include "source/cfa.h"
 
+#include "source/opt/ir_builder.h"
+
 // Debug Buffer Offsets
 static const int kDebugOutputSizeOffset = 0;
 static const int kDebugOutputDataOffset = 1;
