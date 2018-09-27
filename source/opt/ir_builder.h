@@ -81,14 +81,14 @@ class InstructionBuilder {
   // |operands| must be a sequence of operand ids.
   // Use |result| for the result id if non-zero.
   Instruction* AddNaryOp(uint32_t type_id, SpvOp opcode,
-      const std::vector<uint32_t>& operands) {
+      const std::vector<uint32_t>& operands, uint32_t result = 0) {
     std::vector<Operand> ops;
     for (size_t i = 0; i < operands.size(); i++) {
       ops.push_back({ SPV_OPERAND_TYPE_ID,{ operands[i] } });
     }
     std::unique_ptr<Instruction> new_inst(new Instruction(
       GetContext(), opcode, type_id,
-      GetContext()->TakeNextId(), ops));
+      result != 0 ? result : GetContext()->TakeNextId(), ops));
     return AddInstruction(std::move(new_inst));
   }
 
@@ -190,14 +190,7 @@ class InstructionBuilder {
   Instruction* AddPhi(uint32_t type, const std::vector<uint32_t>& incomings,
       uint32_t result = 0) {
     assert(incomings.size() % 2 == 0 && "A sequence of pairs is expected");
-    std::vector<Operand> phi_ops;
-    for (size_t i = 0; i < incomings.size(); i++) {
-      phi_ops.push_back({SPV_OPERAND_TYPE_ID, {incomings[i]}});
-    }
-    std::unique_ptr<Instruction> phi_inst(new Instruction(
-        GetContext(), SpvOpPhi, type,
-        result != 0 ? result : GetContext()->TakeNextId(), phi_ops));
-    return AddInstruction(std::move(phi_inst));
+    return AddNaryOp(type, SpvOpPhi, incomings, result);
   }
 
   // Creates an addition instruction.
