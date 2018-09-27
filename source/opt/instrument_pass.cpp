@@ -18,8 +18,6 @@
 
 #include "source/cfa.h"
 
-#include "source/opt/ir_builder.h"
-
 // Debug Buffer Offsets
 static const int kDebugOutputSizeOffset = 0;
 static const int kDebugOutputDataOffset = 1;
@@ -463,22 +461,13 @@ void InstrumentPass::GenDebugOutputCode(
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
   // Call debug output function. Pass func_idx, instruction_idx and
   // validation ids as args.
-  uint32_t call_id = TakeNextId();
   uint32_t val_id_cnt = static_cast<uint32_t>(validation_ids.size());
   uint32_t output_func_id = GetOutputFunctionId(stage_idx, val_id_cnt);
-  std::unique_ptr<Instruction> newCallOp(
-      new Instruction(context(), SpvOpFunctionCall, GetVoidId(), call_id,
-      { { SPV_OPERAND_TYPE_ID, { output_func_id } } }));
-  newCallOp->AddOperand({ SPV_OPERAND_TYPE_ID,
-      { GetUintConstantId(func_idx) } });
-  newCallOp->AddOperand({ SPV_OPERAND_TYPE_ID,
-      { GetUintConstantId(instruction_idx) } });
-  for (uint32_t vid : validation_ids) {
-    uint32_t uvid = GenUintCastCode(vid, new_blk_ptr);
-    newCallOp->AddOperand({ SPV_OPERAND_TYPE_ID, { uvid } });
-  }
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newCallOp);
-  (*new_blk_ptr)->AddInstruction(std::move(newCallOp));
+  std::vector<uint32_t> args = { output_func_id, GetUintConstantId(func_idx),
+      GetUintConstantId(instruction_idx) };
+  (void) args.insert(args.end(), validation_ids.begin(), validation_ids.end());
+  InstructionBuilder builder(context(), &**new_blk_ptr, kInstPreservedAnalyses);
+  (void) builder.AddNaryOp(GetVoidId(), SpvOpFunctionCall, args);
 }
 
 bool InstrumentPass::IsSameBlockOp(const Instruction* inst) const {

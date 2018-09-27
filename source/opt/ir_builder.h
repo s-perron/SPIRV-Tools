@@ -76,6 +76,22 @@ class InstructionBuilder {
     return AddInstruction(std::move(newBinOp));
   }
 
+  // Creates an N-ary instruction of |opcode|.
+  // |typid| must be the id of the instruction's type.
+  // |operands| must be a sequence of operand ids.
+  // Use |result| for the result id if non-zero.
+  Instruction* AddNaryOp(uint32_t type_id, SpvOp opcode,
+      const std::vector<uint32_t>& operands) {
+    std::vector<Operand> ops;
+    for (size_t i = 0; i < operands.size(); i++) {
+      ops.push_back({ SPV_OPERAND_TYPE_ID,{ operands[i] } });
+    }
+    std::unique_ptr<Instruction> new_inst(new Instruction(
+      GetContext(), opcode, type_id,
+      GetContext()->TakeNextId(), ops));
+    return AddInstruction(std::move(new_inst));
+  }
+
   // Creates a new selection merge instruction.
   // The id |merge_id| is the merge basic block id.
   Instruction* AddSelectionMerge(

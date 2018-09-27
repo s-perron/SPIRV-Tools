@@ -24,7 +24,11 @@
 #include <vector>
 
 #include "decoration_manager.h"
+#include "ir_builder.h"
 #include "pass.h"
+
+namespace spvtools {
+namespace opt {
 
 // Validation Ids
 static const int kInstValidationIdBindless = 0;
@@ -37,8 +41,9 @@ static const uint32_t kInstErrorBindlessUninitialized = 1;
 static const uint32_t kDebugOutputBindingBindless = 0;
 static const uint32_t kDebugInputBindingBindless = 1;
 
-namespace spvtools {
-namespace opt {
+// Preserved Analyses
+static const IRContext::Analysis kInstPreservedAnalyses = 
+    IRContext::kAnalysisDefUse;
 
 // This is a base class to assist in the creation of passes which instrument
 // modules. More specifically, passes which replace instructions with a larger

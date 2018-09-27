@@ -16,8 +16,6 @@
 
 #include "inst_bindless_check_pass.h"
 
-#include "source/opt/ir_builder.h"
-
 // Input Operand Indices
 static const int kSpvImageSampleImageIdInIdx = 0;
 static const int kSpvSampledImageImageIdInIdx = 0;
@@ -143,8 +141,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   // being full reference and false branch being debug output and zero
   // for the referenced value.
   MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-  InstructionBuilder builder(context(), &*new_blk_ptr,
-      IRContext::kAnalysisDefUse);
+  InstructionBuilder builder(context(), &*new_blk_ptr, kInstPreservedAnalyses);
   Instruction* ult_inst = builder.AddBinaryOp(GetBoolId(), SpvOpULessThan,
       indexId, lengthId);
   uint32_t mergeBlkId = TakeNextId();
@@ -200,8 +197,9 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   new_blocks->push_back(std::move(new_blk_ptr));
   new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
   builder.SetInsertPoint(&*new_blk_ptr);
+  uint32_t uIndexId = GenUintCastCode(indexId, &new_blk_ptr);
   GenDebugOutputCode(function_idx, instruction_idx,
-      stage_idx, { errorId, indexId, lengthId }, new_blocks,
+      stage_idx, { errorId, uIndexId, lengthId }, new_blocks,
       &new_blk_ptr);
   builder.SetInsertPoint(&*new_blk_ptr);
   // Remember last invalid block id
