@@ -58,11 +58,18 @@ class InstructionBuilder {
       : InstructionBuilder(context, parent_block, parent_block->end(),
                            preserved_analyses) {}
 
+  Instruction* AddNullaryOp(uint32_t type_id, SpvOp opcode) {
+    std::unique_ptr<Instruction> newUnOp(
+      new Instruction(GetContext(), opcode, type_id,
+          opcode == SpvOpReturn ? 0 : GetContext()->TakeNextId(), {}));
+    return AddInstruction(std::move(newUnOp));
+  }
+
   Instruction* AddUnaryOp(uint32_t type_id, SpvOp opcode, uint32_t operand1) {
     std::unique_ptr<Instruction> newUnOp(
       new Instruction(GetContext(), opcode, type_id,
-        GetContext()->TakeNextId(),
-        { { spv_operand_type_t::SPV_OPERAND_TYPE_ID, { operand1 } } }));
+          GetContext()->TakeNextId(),
+          { { spv_operand_type_t::SPV_OPERAND_TYPE_ID, { operand1 } } }));
     return AddInstruction(std::move(newUnOp));
   }
 
@@ -70,9 +77,43 @@ class InstructionBuilder {
       uint32_t operand2) {
     std::unique_ptr<Instruction> newBinOp(
       new Instruction(GetContext(), opcode, type_id,
-          GetContext()->TakeNextId(),
+          opcode == SpvOpStore ? 0 : GetContext()->TakeNextId(),
           { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
             { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
+    return AddInstruction(std::move(newBinOp));
+  }
+
+  Instruction* AddTernaryOp(uint32_t type_id, SpvOp opcode, uint32_t operand1,
+    uint32_t operand2, uint32_t operand3) {
+    std::unique_ptr<Instruction> newTernOp(
+      new Instruction(GetContext(), opcode, type_id,
+        GetContext()->TakeNextId(),
+        { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+          { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } },
+          { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand3 } } }));
+    return AddInstruction(std::move(newTernOp));
+  }
+
+  Instruction* AddQuadOp(uint32_t type_id, SpvOp opcode, uint32_t operand1,
+      uint32_t operand2, uint32_t operand3, uint32_t operand4) {
+    std::unique_ptr<Instruction> newQuadOp(
+      new Instruction(GetContext(), opcode, type_id,
+        GetContext()->TakeNextId(),
+        { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+          { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } },
+          { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand3 } },
+          { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand4 } } }));
+    return AddInstruction(std::move(newQuadOp));
+  }
+
+  Instruction* AddIdLiteralOp(uint32_t type_id, SpvOp opcode, uint32_t operand1,
+    uint32_t operand2) {
+    std::unique_ptr<Instruction> newBinOp(
+      new Instruction(GetContext(), opcode, type_id,
+        GetContext()->TakeNextId(),
+        { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
+          { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
+            { operand2 } } }));
     return AddInstruction(std::move(newBinOp));
   }
 

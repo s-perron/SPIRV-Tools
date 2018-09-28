@@ -337,35 +337,28 @@ uint32_t InstrumentPass::GetUintConstantId(uint32_t u) {
 }
 
 uint32_t InstrumentPass::GenUintCastCode(
-  uint32_t val_id,
-  std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    uint32_t val_id,
+    InstructionBuilder* builder) {
   // Cast value to 32-bit unsigned if necessary
-  uint32_t uval_id = val_id;
-  Instruction* val_inst = get_def_use_mgr()->GetDef(val_id);
-  if (val_inst->type_id() != GetUintId()) {
-    uval_id = TakeNextId();
-    AddUnaryOp(GetUintId(), uval_id, SpvOpBitcast, val_id,
-      new_blk_ptr);
-  }
-  return uval_id;
+  if (get_def_use_mgr()->GetDef(val_id)->type_id() == GetUintId())
+    return val_id;
+  return builder->AddUnaryOp(GetUintId(), SpvOpBitcast, val_id)->result_id();
 }
 
 void InstrumentPass::GenDebugOutputFieldCode(
     uint32_t base_offset_id,
     uint32_t field_offset,
     uint32_t field_value_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    InstructionBuilder* builder) {
   // Cast value to 32-bit unsigned if necessary
-  uint32_t val_id = GenUintCastCode(field_value_id, new_blk_ptr);
+  uint32_t val_id = GenUintCastCode(field_value_id, builder);
   // Store value
-  uint32_t data_idx_id = TakeNextId();
-  AddBinaryOp(GetUintId(), data_idx_id, SpvOpIAdd,
-      base_offset_id, GetUintConstantId(field_offset), new_blk_ptr);
-  uint32_t achain_id = TakeNextId();
-  AddTernaryOp(GetOutputBufferUintPtrId(), achain_id, SpvOpAccessChain,
-      GetOutputBufferId(), GetUintConstantId(kDebugOutputDataOffset),
-      data_idx_id, new_blk_ptr);
-  AddBinaryOp(0, 0, SpvOpStore, achain_id, val_id, new_blk_ptr);
+  Instruction* data_idx_inst = builder->AddBinaryOp(GetUintId(), SpvOpIAdd,
+      base_offset_id, GetUintConstantId(field_offset));
+  Instruction* achain_inst = builder->AddTernaryOp(GetOutputBufferUintPtrId(),
+      SpvOpAccessChain, GetOutputBufferId(),
+      GetUintConstantId(kDebugOutputDataOffset), data_idx_inst->result_id());
+  (void) builder->AddBinaryOp(0, SpvOpStore, achain_inst->result_id(), val_id);
 }
 
 void InstrumentPass::GenCommonDebugOutputCode(
@@ -374,71 +367,67 @@ void InstrumentPass::GenCommonDebugOutputCode(
     uint32_t inst_id,
     uint32_t stage_idx,
     uint32_t base_offset_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    InstructionBuilder* builder) {
   // Store record size
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutSize,
-      GetUintConstantId(record_sz), new_blk_ptr);
+      GetUintConstantId(record_sz), builder);
   // Store Shader Id
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutShaderId,
-      GetUintConstantId(shader_id_), new_blk_ptr);
+      GetUintConstantId(shader_id_), builder);
   // Store Function Idx
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutFunctionIdx,
-      func_id, new_blk_ptr);
+      func_id, builder);
   // Store Instruction Idx
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutInstructionIdx,
-      inst_id, new_blk_ptr);
+      inst_id, builder);
   // Store Stage Idx
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutStageIdx,
-      GetUintConstantId(stage_idx), new_blk_ptr);
+      GetUintConstantId(stage_idx), builder);
 }
 
 void InstrumentPass::GenFragCoordEltDebugOutputCode(
     uint32_t base_offset_id,
     uint32_t uint_frag_coord_id,
     uint32_t element,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
-  uint32_t element_val_id = TakeNextId();
-  AddExtractOp(GetUintId(), element_val_id,
-      uint_frag_coord_id, element, new_blk_ptr);
+  InstructionBuilder* builder) {
+  Instruction* element_val_inst = builder->AddIdLiteralOp(GetUintId(),
+      SpvOpCompositeExtract, uint_frag_coord_id, element);
   GenDebugOutputFieldCode(base_offset_id, kInstFragOutFragCoordX + element,
-      element_val_id, new_blk_ptr);
+      element_val_inst->result_id(), builder);
 }
 
 void InstrumentPass::GenBuiltinIdOutputCode(
     uint32_t builtinId,
     uint32_t builtinOff,
     uint32_t base_offset_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    InstructionBuilder* builder) {
   // Load and store builtin
-  uint32_t load_id = TakeNextId();
-  AddUnaryOp(GetUintId(), load_id, SpvOpLoad, builtinId, new_blk_ptr);
-  GenDebugOutputFieldCode(base_offset_id, builtinOff,
-    load_id, new_blk_ptr);
+  Instruction* load_inst = builder->AddUnaryOp(GetUintId(), SpvOpLoad, builtinId);
+  GenDebugOutputFieldCode(base_offset_id, builtinOff, load_inst->result_id(),
+      builder);
 }
 
 void InstrumentPass::GenVertDebugOutputCode(
     uint32_t base_offset_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    InstructionBuilder* builder) {
   // Load and store VertexId and InstanceId
   GenBuiltinIdOutputCode(GetVertexId(), kInstVertOutVertexId,
-      base_offset_id, new_blk_ptr);
+      base_offset_id, builder);
   GenBuiltinIdOutputCode(GetInstanceId(), kInstVertOutInstanceId,
-      base_offset_id, new_blk_ptr);
+      base_offset_id, builder);
 }
 
 void InstrumentPass::GenFragDebugOutputCode(
     uint32_t base_offset_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    InstructionBuilder* builder) {
   // Load FragCoord and convert to Uint
-  uint32_t frag_coord_id = TakeNextId();
-  AddUnaryOp(GetVec4FloatId(), frag_coord_id, SpvOpLoad, GetFragCoordId(),
-      new_blk_ptr);
-  uint32_t uint_frag_coord_id = TakeNextId();
-  AddUnaryOp(GetVec4UintId(), uint_frag_coord_id, SpvOpBitcast, frag_coord_id,
-      new_blk_ptr);
+  Instruction* frag_coord_inst = builder->AddUnaryOp(GetVec4FloatId(),
+      SpvOpLoad, GetFragCoordId());
+  Instruction* uint_frag_coord_inst = builder->AddUnaryOp(GetVec4UintId(),
+      SpvOpBitcast, frag_coord_inst->result_id());
   for (uint32_t u = 0; u < 2u; ++u)
-    GenFragCoordEltDebugOutputCode(base_offset_id,  uint_frag_coord_id, u,
-        new_blk_ptr);
+    GenFragCoordEltDebugOutputCode(base_offset_id,
+        uint_frag_coord_inst->result_id(), u, builder);
 }
 
 uint32_t InstrumentPass::GetStageOutputRecordSize(uint32_t stage_idx) {
@@ -457,8 +446,7 @@ void InstrumentPass::GenDebugOutputCode(
     uint32_t instruction_idx,
     uint32_t stage_idx,
     const std::vector<uint32_t> &validation_ids,
-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-    std::unique_ptr<BasicBlock>* new_blk_ptr) {
+    InstructionBuilder* builder) {
   // Call debug output function. Pass func_idx, instruction_idx and
   // validation ids as args.
   uint32_t val_id_cnt = static_cast<uint32_t>(validation_ids.size());
@@ -466,8 +454,7 @@ void InstrumentPass::GenDebugOutputCode(
   std::vector<uint32_t> args = { output_func_id, GetUintConstantId(func_idx),
       GetUintConstantId(instruction_idx) };
   (void) args.insert(args.end(), validation_ids.begin(), validation_ids.end());
-  InstructionBuilder builder(context(), &**new_blk_ptr, kInstPreservedAnalyses);
-  (void) builder.AddNaryOp(GetVoidId(), SpvOpFunctionCall, args);
+  (void) builder->AddNaryOp(GetVoidId(), SpvOpFunctionCall, args);
 }
 
 bool InstrumentPass::IsSameBlockOp(const Instruction* inst) const {
@@ -699,64 +686,59 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     std::unique_ptr<Instruction> test_label(NewLabel(test_blk_id));
     std::unique_ptr<BasicBlock> new_blk_ptr = MakeUnique<BasicBlock>(
         std::move(test_label));
+    InstructionBuilder builder(context(), &*new_blk_ptr, kInstPreservedAnalyses);
     // Gen test if debug output buffer size will not be exceeded.
     uint32_t obuf_record_sz = GetStageOutputRecordSize(stage_idx) +
         val_spec_param_cnt;
-    uint32_t obuf_curr_sz_ac_id = TakeNextId();
-    AddBinaryOp(GetOutputBufferUintPtrId(), obuf_curr_sz_ac_id,
+    Instruction* obuf_curr_sz_ac_inst = builder.AddBinaryOp(
+        GetOutputBufferUintPtrId(),
         SpvOpAccessChain, GetOutputBufferId(),
-        GetUintConstantId(kDebugOutputSizeOffset),
-        &new_blk_ptr);
+        GetUintConstantId(kDebugOutputSizeOffset));
     // Fetch the current debug buffer written size atomically, adding the
     // size of the record to be written.
-    uint32_t obuf_curr_sz_id = TakeNextId();
-    AddQuadOp(GetUintId(), obuf_curr_sz_id,
+    Instruction* obuf_curr_sz_inst = builder.AddQuadOp(GetUintId(),
         SpvOpAtomicIAdd,
-        obuf_curr_sz_ac_id,
+        obuf_curr_sz_ac_inst->result_id(),
         GetUintConstantId(SpvScopeInvocation),
         GetUintConstantId(SpvMemoryAccessMaskNone),
-        GetUintConstantId(obuf_record_sz),
-        &new_blk_ptr);
+        GetUintConstantId(obuf_record_sz));
+    uint32_t obuf_curr_sz_id = obuf_curr_sz_inst->result_id();
     // Compute new written size
-    uint32_t obuf_new_sz_id = TakeNextId();
-    AddBinaryOp(GetUintId(), obuf_new_sz_id,
-        SpvOpIAdd,
-        obuf_curr_sz_id, GetUintConstantId(obuf_record_sz),
-        &new_blk_ptr);
+    Instruction* obuf_new_sz_inst = builder.AddBinaryOp(GetUintId(), SpvOpIAdd,
+        obuf_curr_sz_id, GetUintConstantId(obuf_record_sz));
     // Fetch the data bound
-    uint32_t obuf_bnd_id = TakeNextId();
-    AddArrayLength(obuf_bnd_id,
-        GetOutputBufferId(),
-        kDebugOutputDataOffset,
-        &new_blk_ptr);
+    Instruction* obuf_bnd_inst = builder.AddIdLiteralOp(GetUintId(),
+        SpvOpArrayLength, GetOutputBufferId(), kDebugOutputDataOffset);
     // Test that new written size is less than or equal to debug output
     // data bound
-    uint32_t obuf_safe_id = TakeNextId();
-    AddBinaryOp(GetBoolId(), obuf_safe_id,
-        SpvOpULessThanEqual, obuf_new_sz_id, obuf_bnd_id,
-        &new_blk_ptr);
+    Instruction* obuf_safe_inst = builder.AddBinaryOp(GetBoolId(),
+        SpvOpULessThanEqual, obuf_new_sz_inst->result_id(),
+        obuf_bnd_inst->result_id());
     uint32_t mergeBlkId = TakeNextId();
     uint32_t writeBlkId = TakeNextId();
     std::unique_ptr<Instruction> mergeLabel(NewLabel(mergeBlkId));
     std::unique_ptr<Instruction> writeLabel(NewLabel(writeBlkId));
-    AddSelectionMerge(mergeBlkId, SpvSelectionControlMaskNone, &new_blk_ptr);
-    AddBranchCond(obuf_safe_id, writeBlkId, mergeBlkId, &new_blk_ptr);
+    (void) builder.AddConditionalBranch(obuf_safe_inst->result_id(),
+        writeBlkId, mergeBlkId, mergeBlkId, SpvSelectionControlMaskNone);
     // Close safety test block and gen write block
     new_blk_ptr->SetParent(&*output_func);
     output_func->AddBasicBlock(std::move(new_blk_ptr));
     new_blk_ptr = MakeUnique<BasicBlock>(std::move(writeLabel));
+    builder.SetInsertPoint(&*new_blk_ptr);
+    // Generate common debug record members
     GenCommonDebugOutputCode(obuf_record_sz,
         param_vec[kInstCommonParamFuncIdx], param_vec[kInstCommonParamInstIdx],
-        stage_idx, obuf_curr_sz_id, &new_blk_ptr);
+        stage_idx, obuf_curr_sz_id, &builder);
+    // Generate stage-specific record members
     // TODO(greg-lunarg): Add support for all stages
     uint32_t stage_offset = 0;
     switch (stage_idx) {
     case SpvExecutionModelFragment:
-      GenFragDebugOutputCode(obuf_curr_sz_id, &new_blk_ptr);
+      GenFragDebugOutputCode(obuf_curr_sz_id, &builder);
       stage_offset = kInstFragOutRecordSize;
       break;
     case SpvExecutionModelVertex:
-      GenVertDebugOutputCode(obuf_curr_sz_id, &new_blk_ptr);
+      GenVertDebugOutputCode(obuf_curr_sz_id, &builder);
       stage_offset = kInstVertOutRecordSize;
       break;
     default:
@@ -766,15 +748,16 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     // Gen writes of validation specific data
     for (uint32_t i = 0; i < val_spec_param_cnt; ++i) {
       GenDebugOutputFieldCode(obuf_curr_sz_id, stage_offset + i,
-          param_vec[kInstCommonOutFunctionIdx + i], &new_blk_ptr);
+          param_vec[kInstCommonOutFunctionIdx + i], &builder);
     }
     // Close write block and gen merge block
-    AddBranch(mergeBlkId, &new_blk_ptr);
+    (void) builder.AddBranch(mergeBlkId);
     new_blk_ptr->SetParent(&*output_func);
     output_func->AddBasicBlock(std::move(new_blk_ptr));
     new_blk_ptr = MakeUnique<BasicBlock>(std::move(mergeLabel));
+    builder.SetInsertPoint(&*new_blk_ptr);
     // Close merge block and function and add function to module
-    AddNullaryOp(0, 0, SpvOpReturn, &new_blk_ptr);
+    (void) builder.AddNullaryOp(0, SpvOpReturn);
     new_blk_ptr->SetParent(&*output_func);
     output_func->AddBasicBlock(std::move(new_blk_ptr));
     std::unique_ptr<Instruction> func_end_inst(

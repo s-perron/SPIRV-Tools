@@ -118,8 +118,7 @@ class InstrumentPass : public Pass {
     uint32_t instruction_idx,
     uint32_t stage_idx,
     const std::vector<uint32_t> &validation_ids,
-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
+    InstructionBuilder* builder);
 
   // Return id for unsigned int constant value |u|.
   uint32_t GetUintConstantId(uint32_t u);
@@ -128,7 +127,7 @@ class InstrumentPass : public Pass {
   // an id to the unsigned equivalent.
   uint32_t GenUintCastCode(
     uint32_t value_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
+    InstructionBuilder* builder);
 
   // Add nullary instruction |type_id, result_id, opcode| to
   // |block_ptr|.
@@ -281,7 +280,7 @@ class InstrumentPass : public Pass {
     uint32_t base_offset_id,
     uint32_t field_offset,
     uint32_t field_value_id,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
+    InstructionBuilder* builder);
 
   // Generate instructions into |new_blk_ptr| which will write the members
   // of the debug output record common for all stages and validations at
@@ -292,7 +291,7 @@ class InstrumentPass : public Pass {
     uint32_t instruction_idx,
     uint32_t stage_idx,
     uint32_t base_off,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
+    InstructionBuilder* builder);
 
   // Generate instructions into |new_blk_ptr| which will write
   // |uint_frag_coord_id| at |component| of the record at |base_offset_id| of
@@ -301,7 +300,7 @@ class InstrumentPass : public Pass {
     uint32_t base_offset_id,
     uint32_t uint_frag_coord_id,
     uint32_t component,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
+    InstructionBuilder* builder);
 
   // Generate instructions into |new_blk_ptr| which will write the vertex-
   // shader-specific members of the debug output buffer at |base_off|.
@@ -309,19 +308,19 @@ class InstrumentPass : public Pass {
     uint32_t builtin_id,
     uint32_t builtin_off,
     uint32_t base_off,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
+    InstructionBuilder* builder);
 
   // Generate instructions into |new_blk_ptr| which will write the vertex-
   // shader-specific members of the debug output buffer at |base_off|.
   void GenVertDebugOutputCode(
     uint32_t base_off,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
+    InstructionBuilder* builder);
 
   // Generate instructions into |new_blk_ptr| which will write the fragment-
   // shader-specific members of the debug output buffer at |base_off|.
   void GenFragDebugOutputCode(
     uint32_t base_off,
-    std::unique_ptr<BasicBlock>* new_blk_ptr);
+    InstructionBuilder* builder);
 
   // Return size of common and stage-specific output record members
   uint32_t GetStageOutputRecordSize(uint32_t stage_idx);
