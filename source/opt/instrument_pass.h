@@ -129,57 +129,6 @@ class InstrumentPass : public Pass {
     uint32_t value_id,
     InstructionBuilder* builder);
 
-  // Add nullary instruction |type_id, result_id, opcode| to
-  // |block_ptr|.
-  void AddNullaryOp(
-    uint32_t type_id, uint32_t result_id, SpvOp opcode,
-    std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add unary instruction |type_id, result_id, opcode, operand1| to
-  // |block_ptr|.
-  void AddUnaryOp(
-    uint32_t type_id, uint32_t result_id, SpvOp opcode,
-    uint32_t operand, std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add binary instruction |type_id, result_id, opcode, operand1, operand2| to
-  // |block_ptr|.
-  void AddBinaryOp(
-    uint32_t type_id, uint32_t result_id, SpvOp opcode,
-    uint32_t operand1, uint32_t operand2,
-    std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add ternary instruction |type_id, result_id, opcode, operand1, operand2,
-  // operand3| to |block_ptr|.
-  void AddTernaryOp(
-    uint32_t type_id, uint32_t result_id, SpvOp opcode,
-    uint32_t operand1, uint32_t operand2, uint32_t operand3,
-    std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add quadernary instruction |type_id, result_id, opcode, operand1,
-  // operand2, operand3, operand4| to |block_ptr|.
-  void AddQuadOp(uint32_t type_id, uint32_t result_id,
-    SpvOp opcode, uint32_t operand1, uint32_t operand2, uint32_t operand3,
-    uint32_t operand4, std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add extract instruction |type_id, opcode, operand1, operand2| to
-  // |block_ptr| and return resultId.
-  void AddExtractOp(
-    uint32_t type_id, uint32_t result_id,
-    uint32_t operand1, uint32_t operand2,
-    std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add array length instruction |type_id, opcode, struct_ptr_id, member_idx|
-  // to |block_ptr| and return resultId.
-  void AddArrayLength(uint32_t result_id,
-    uint32_t struct_ptr_id, uint32_t member_idx,
-    std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add SelectionMerge instruction |mergeBlockId, selectionControl| to
-  // |block_ptr|.
-  void AddSelectionMerge(
-    uint32_t mergeBlockId, uint32_t selectionControl,
-    std::unique_ptr<BasicBlock>* block_ptr);
-
   // Return id of pointer to builtin |builtin_val|.
   uint32_t FindBuiltin(uint32_t builtin_val);
 
@@ -196,18 +145,6 @@ class InstrumentPass : public Pass {
   // update decoration manager.
   void AddMemberDecoration(uint32_t member, uint32_t inst_id,
     uint32_t decoration, uint32_t decoration_value);
-
-  // Add unconditional branch to labelId to end of block block_ptr.
-  void AddBranch(uint32_t labelId, std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add conditional branch to end of block |block_ptr|.
-  void AddBranchCond(uint32_t cond_id, uint32_t true_id, uint32_t false_id,
-                     std::unique_ptr<BasicBlock>* block_ptr);
-
-  // Add Phi to |block_ptr|.
-  void AddPhi(uint32_t type_id, uint32_t result_id, uint32_t var0_id,
-              uint32_t parent0_id, uint32_t var1_id, uint32_t parent1_id,
-              std::unique_ptr<BasicBlock>* block_ptr);
 
   // Return new label.
   std::unique_ptr<Instruction> NewLabel(uint32_t label_id);

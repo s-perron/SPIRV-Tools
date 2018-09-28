@@ -112,84 +112,6 @@ void InstrumentPass::MovePostludeCode(
   }
 }
 
-void InstrumentPass::AddNullaryOp(uint32_t type_id, uint32_t result_id,
-    SpvOp opcode, std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newNullaryOp(
-    new Instruction(context(), opcode, type_id, result_id, {}));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newNullaryOp);
-  (*block_ptr)->AddInstruction(std::move(newNullaryOp));
-}
-
-void InstrumentPass::AddUnaryOp(uint32_t type_id, uint32_t result_id,
-                                     SpvOp opcode, uint32_t operand,
-                                     std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newUnOp(
-      new Instruction(context(), opcode, type_id, result_id,
-      { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newUnOp);
-  (*block_ptr)->AddInstruction(std::move(newUnOp));
-}
-
-void InstrumentPass::AddBinaryOp(uint32_t type_id, uint32_t result_id,
-  SpvOp opcode, uint32_t operand1, uint32_t operand2,
-  std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newBinOp(
-    new Instruction(context(), opcode, type_id, result_id,
-    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
-    { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newBinOp);
-  (*block_ptr)->AddInstruction(std::move(newBinOp));
-}
-
-void InstrumentPass::AddTernaryOp(uint32_t type_id, uint32_t result_id,
-  SpvOp opcode, uint32_t operand1, uint32_t operand2, uint32_t operand3,
-  std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newTernOp(
-    new Instruction(context(), opcode, type_id, result_id,
-    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
-      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } },
-      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand3 } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newTernOp);
-  (*block_ptr)->AddInstruction(std::move(newTernOp));
-}
-
-void InstrumentPass::AddQuadOp(uint32_t type_id, uint32_t result_id,
-  SpvOp opcode, uint32_t operand1, uint32_t operand2, uint32_t operand3,
-  uint32_t operand4, std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newQuadOp(
-    new Instruction(context(), opcode, type_id, result_id,
-    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
-      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand2 } },
-      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand3 } },
-      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand4 } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newQuadOp);
-  (*block_ptr)->AddInstruction(std::move(newQuadOp));
-}
-
-void InstrumentPass::AddExtractOp(uint32_t type_id, uint32_t result_id,
-  uint32_t operand1, uint32_t operand2,
-  std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newBinOp(
-    new Instruction(context(), SpvOpCompositeExtract, type_id, result_id,
-    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ operand1 } },
-    { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,{ operand2 } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newBinOp);
-  (*block_ptr)->AddInstruction(std::move(newBinOp));
-}
-
-void InstrumentPass::AddArrayLength(uint32_t result_id,
-    uint32_t struct_ptr_id, uint32_t member_idx,
-    std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newALenOp(
-      new Instruction(context(), SpvOpArrayLength,
-          GetUintId(), result_id,
-          { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ struct_ptr_id } },
-            { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER, {
-              member_idx } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newALenOp);
-  (*block_ptr)->AddInstruction(std::move(newALenOp));
-}
-
 uint32_t InstrumentPass::FindBuiltin(uint32_t builtin_val) {
   for (auto& a : get_module()->annotations()) {
     if (a.opcode() == SpvOpDecorate) {
@@ -262,51 +184,6 @@ void InstrumentPass::AddMemberDecoration(uint32_t inst_id, uint32_t member,
   get_def_use_mgr()->AnalyzeInstDefUse(&*newDecoOp);
   get_decoration_mgr()->AddDecoration(&*newDecoOp);
   get_module()->AddAnnotationInst(std::move(newDecoOp));
-}
-
-void InstrumentPass::AddSelectionMerge(
-  uint32_t mergeBlockId, uint32_t selControl,
-  std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newSMOp(
-    new Instruction(context(), SpvOpSelectionMerge, 0, 0,
-      {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {mergeBlockId}},
-       {spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER, {selControl}}}));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newSMOp);
-  (*block_ptr)->AddInstruction(std::move(newSMOp));
-}
-
-void InstrumentPass::AddBranch(uint32_t label_id,
-                           std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newBranch(
-      new Instruction(context(), SpvOpBranch, 0, 0,
-                      {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {label_id}}}));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newBranch);
-  (*block_ptr)->AddInstruction(std::move(newBranch));
-}
-
-void InstrumentPass::AddBranchCond(uint32_t cond_id, uint32_t true_id,
-                               uint32_t false_id,
-                               std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newBranch(
-      new Instruction(context(), SpvOpBranchConditional, 0, 0,
-                      {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {cond_id}},
-                       {spv_operand_type_t::SPV_OPERAND_TYPE_ID, {true_id}},
-                       {spv_operand_type_t::SPV_OPERAND_TYPE_ID, {false_id}}}));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newBranch);
-  (*block_ptr)->AddInstruction(std::move(newBranch));
-}
-
-void InstrumentPass::AddPhi(uint32_t type_id, uint32_t result_id, uint32_t var0_id,
-  uint32_t parent0_id, uint32_t var1_id, uint32_t parent1_id,
-  std::unique_ptr<BasicBlock>* block_ptr) {
-  std::unique_ptr<Instruction> newPhi(
-    new Instruction(context(), SpvOpPhi, type_id, result_id,
-    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ var0_id } },
-      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ parent0_id } },
-      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ var1_id } },
-      { spv_operand_type_t::SPV_OPERAND_TYPE_ID,{ parent1_id } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newPhi);
-  (*block_ptr)->AddInstruction(std::move(newPhi));
 }
 
 std::unique_ptr<Instruction> InstrumentPass::NewLabel(uint32_t label_id) {
