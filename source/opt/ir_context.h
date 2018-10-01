@@ -71,7 +71,8 @@ class IRContext {
     kAnalysisScalarEvolution = 1 << 8,
     kAnalysisRegisterPressure = 1 << 9,
     kAnalysisValueNumberTable = 1 << 10,
-    kAnalysisEnd = 1 << 11
+    kAnalysisBuiltinVarId = 1 << 11,
+    kAnalysisEnd = 1 << 12
   };
 
   friend inline Analysis operator|(Analysis lhs, Analysis rhs);
@@ -456,6 +457,10 @@ class IRContext {
     return *inst_folder_;
   }
 
+  // Return id of variable only decorated with |builtin|, if in module.
+  // Return 0 otherwise.
+  uint32_t FindBuiltinVar(uint32_t builtin);
+
  private:
   // Builds the def-use manager from scratch, even if it was already valid.
   void BuildDefUseManager() {
@@ -518,6 +523,13 @@ class IRContext {
     // Clear the cache.
     loop_descriptors_.clear();
     valid_analyses_ = valid_analyses_ | kAnalysisLoopAnalysis;
+  }
+
+  // Removes all computed loop descriptors.
+  void ResetBuiltinAnalysis() {
+    // Clear the cache.
+    builtin_var_id_map_.clear();
+    valid_analyses_ = valid_analyses_ | kAnalysisBuiltinVarId;
   }
 
   // Analyzes the features in the owned module. Builds the manager if required.
@@ -583,6 +595,10 @@ class IRContext {
   // Opcodes of shader capability core executable instructions
   // without side-effect.
   std::unordered_map<uint32_t, std::unordered_set<uint32_t>> combinator_ops_;
+
+  // Opcodes of shader capability core executable instructions
+  // without side-effect.
+  std::unordered_map<uint32_t, uint32_t> builtin_var_id_map_;
 
   // The CFG for all the functions in |module_|.
   std::unique_ptr<CFG> cfg_;

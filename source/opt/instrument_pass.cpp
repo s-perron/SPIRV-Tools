@@ -490,21 +490,22 @@ uint32_t InstrumentPass::GetVoidId() {
 
 uint32_t InstrumentPass::GetBuiltinVarId(uint32_t builtin, uint32_t type_id,
     uint32_t* var_id) {
-  // If not yet known, look for one in shader
-  if (*var_id == 0) *var_id = FindBuiltin(builtin);
-  // If none in shader, create one
-  if (*var_id == 0) {
-    uint32_t varTyPtrId = context()->get_type_mgr()->FindPointerToType(
+  // If cached, return it.
+  if (*var_id != 0) return *var_id;
+  // Look for one in shader
+  *var_id = context()->FindBuiltinVar(builtin);
+  if (*var_id != 0) return *var_id;
+  // Create one
+  uint32_t varTyPtrId = context()->get_type_mgr()->FindPointerToType(
       type_id, SpvStorageClassInput);
-    *var_id = TakeNextId();
-    std::unique_ptr<Instruction> newVarOp(
+  *var_id = TakeNextId();
+  std::unique_ptr<Instruction> newVarOp(
       new Instruction(context(), SpvOpVariable, varTyPtrId, *var_id,
-        { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
-          { SpvStorageClassInput } } }));
-    get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
-    get_module()->AddGlobalValue(std::move(newVarOp));
-    AddDecorationVal(*var_id, SpvDecorationBuiltIn, builtin);
-  }
+          { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
+            { SpvStorageClassInput } } }));
+  get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
+  get_module()->AddGlobalValue(std::move(newVarOp));
+  AddDecorationVal(*var_id, SpvDecorationBuiltIn, builtin);
   return *var_id;
 }
 

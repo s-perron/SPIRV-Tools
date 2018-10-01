@@ -21,6 +21,12 @@
 #include "source/opt/mem_pass.h"
 #include "source/opt/reflect.h"
 
+static const int kSpvDecorateTargetIdInIdx = 0;
+static const int kSpvDecorateDecorationInIdx = 1;
+static const int kSpvDecorateBuiltinInIdx = 2;
+static const int kSpvMemberDecorateDecorationInIdx = 2;
+static const int kSpvMemberDecorateBuiltinInIdx = 3;
+
 namespace spvtools {
 namespace opt {
 
@@ -42,6 +48,9 @@ void IRContext::BuildInvalidAnalyses(IRContext::Analysis set) {
   }
   if (set & kAnalysisLoopAnalysis) {
     ResetLoopAnalysis();
+  }
+  if (set & kAnalysisBuiltinVarId) {
+    ResetBuiltinAnalysis();
   }
   if (set & kAnalysisNameMap) {
     BuildIdToNameMap();
@@ -75,6 +84,9 @@ void IRContext::InvalidateAnalyses(IRContext::Analysis analyses_to_invalidate) {
   }
   if (analyses_to_invalidate & kAnalysisCombinators) {
     combinator_ops_.clear();
+  }
+  if (analyses_to_invalidate & kAnalysisBuiltinVarId) {
+    builtin_var_id_map_.clear();
   }
   if (analyses_to_invalidate & kAnalysisCFG) {
     cfg_.reset(nullptr);
@@ -572,6 +584,31 @@ LoopDescriptor* IRContext::GetLoopDescriptor(const Function* f) {
   }
 
   return &it->second;
+}
+
+uint32_t IRContext::FindBuiltinVar(uint32_t builtin) {
+  if (!AreAnalysesValid(kAnalysisBuiltinVarId))
+    ResetBuiltinAnalysis();
+  std::unordered_map<uint32_t, uint32_t>::iterator it =
+    builtin_var_id_map_.find(builtin);
+  if (it != builtin_var_id_map_.end())
+    return it->second;
+  for (auto& a : module_->annotations()) {
+    if (a.opcode() != SpvOpDecorate)
+      continue;
+    if (a.GetSingleWordInOperand(kSpvDecorateDecorationInIdx) !=
+        SpvDecorationBuiltIn)
+      continue;
+    if (a.GetSingleWordInOperand(kSpvDecorateBuiltinInIdx) != builtin)
+      continue;
+    uint32_t target_id = a.GetSingleWordInOperand(kSpvDecorateTargetIdInIdx);
+    Instruction* b_var = get_def_use_mgr()->GetDef(target_id);
+    if (b_var->opcode() != SpvOpVariable)
+      continue;
+    builtin_var_id_map_[builtin] = target_id;
+    return target_id;
+  }
+  return 0;
 }
 
 // Gets the dominator analysis for function |f|.
