@@ -164,9 +164,6 @@ class InstrumentPass : public Pass {
   uint32_t GetOutputFunctionId(uint32_t stage_idx,
       uint32_t val_spec_param_cnt);
 
-  // Add |var_id| to all entry points if not there.
-  void AddVarToEntryPoints(uint32_t var_id);
-
   // Apply instrumentation function |pfn| to every instruction in |func|.
   // If code is generated for an instruction, replace the instruction's
   // block with the new blocks that are generated. Continue processing at the

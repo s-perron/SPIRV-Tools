@@ -545,23 +545,6 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
   return output_func_id_;
 }
 
-void InstrumentPass::AddVarToEntryPoints(uint32_t var_id) {
-  uint32_t ocnt = 0;
-  for (auto& e : get_module()->entry_points()) {
-    bool found = false;
-    e.ForEachInOperand([&ocnt, &found, &var_id](const uint32_t* idp) {
-      if (ocnt >= kEntryPointInterfaceInIdx) {
-        if (*idp == var_id) found = true;
-      }
-      ++ocnt;
-    });
-    if (!found) {
-      e.AddOperand({ SPV_OPERAND_TYPE_ID,{ var_id } });
-      get_def_use_mgr()->AnalyzeInstDefUse(&e);
-    }
-  }
-}
-
 bool InstrumentPass::InstrumentFunction(Function* func, uint32_t stage_idx,
     InstProcessFunction& pfn) {
   bool modified = false;
