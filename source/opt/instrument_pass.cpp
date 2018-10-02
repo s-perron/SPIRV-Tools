@@ -410,10 +410,13 @@ uint32_t InstrumentPass::GetBoolId() {
 }
 
 uint32_t InstrumentPass::GetVoidId() {
-  analysis::TypeManager* type_mgr = context()->get_type_mgr();
-  analysis::Void void_ty;
-  analysis::Type* reg_void_ty = type_mgr->GetRegisteredType(&void_ty);
-  return type_mgr->GetTypeInstruction(reg_void_ty);
+  if (void_id_ == 0) {
+    analysis::TypeManager* type_mgr = context()->get_type_mgr();
+    analysis::Void void_ty;
+    analysis::Type* reg_void_ty = type_mgr->GetRegisteredType(&void_ty);
+    void_id_ = type_mgr->GetTypeInstruction(reg_void_ty);
+  }
+  return void_id_;
 }
 
 uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
@@ -673,6 +676,7 @@ void InstrumentPass::InitializeInstrument() {
   uint_id_ = 0;
   v4uint_id_ = 0;
   bool_id_ = 0;
+  void_id_ = 0;
 
   // clear collections
   id2function_.clear();

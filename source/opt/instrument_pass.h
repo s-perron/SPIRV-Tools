@@ -289,6 +289,9 @@ class InstrumentPass : public Pass {
   // id for bool type
   uint32_t bool_id_;
 
+  // id for void type
+  uint32_t void_id_;
+
   // Pre-instrumentation same-block insts
   std::unordered_map<uint32_t, Instruction*> preCallSB_;
 
