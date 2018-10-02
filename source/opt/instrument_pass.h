@@ -132,20 +132,6 @@ class InstrumentPass : public Pass {
   // Return id of pointer to builtin |builtin_val|.
   uint32_t FindBuiltin(uint32_t builtin_val);
 
-  // Add |decoration, decoration_value| of |inst_id| to module. Also
-  // update decoration manager.
-  void AddDecoration(uint32_t inst_id, uint32_t decoration);
-  
-  // Add |decoration, decoration_value| of |inst_id| to module. Also
-  // update decoration manager.
-  void AddDecorationVal(uint32_t inst_id, uint32_t decoration,
-    uint32_t decoration_value);
-
-  // Add |decoration, decoration_value| of |inst_id| to module. Also
-  // update decoration manager.
-  void AddMemberDecoration(uint32_t member, uint32_t inst_id,
-    uint32_t decoration, uint32_t decoration_value);
-
   // Return new label.
   std::unique_ptr<Instruction> NewLabel(uint32_t label_id);
 

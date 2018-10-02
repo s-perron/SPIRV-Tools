@@ -142,50 +142,6 @@ uint32_t InstrumentPass::FindBuiltin(uint32_t builtin_val) {
   return 0;
 }
 
-void InstrumentPass::AddDecoration(uint32_t inst_id, uint32_t decoration) {
-  std::unique_ptr<Instruction> newDecoOp(
-    new Instruction(context(), SpvOpDecorate, 0, 0,
-    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,
-    { inst_id } },
-    { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
-    { decoration } }}));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newDecoOp);
-  get_decoration_mgr()->AddDecoration(&*newDecoOp);
-  get_module()->AddAnnotationInst(std::move(newDecoOp));
-}
-
-void InstrumentPass::AddDecorationVal(uint32_t inst_id, uint32_t decoration,
-    uint32_t decoration_value) {
-  std::unique_ptr<Instruction> newDecoOp(
-    new Instruction(context(), SpvOpDecorate, 0, 0,
-      { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,
-          { inst_id } },
-        { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
-          { decoration } },
-        { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
-          { decoration_value } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newDecoOp);
-  get_decoration_mgr()->AddDecoration(&*newDecoOp);
-  get_module()->AddAnnotationInst(std::move(newDecoOp));
-}
-
-void InstrumentPass::AddMemberDecoration(uint32_t inst_id, uint32_t member,
-    uint32_t decoration, uint32_t decoration_value) {
-  std::unique_ptr<Instruction> newDecoOp(
-    new Instruction(context(), SpvOpMemberDecorate, 0, 0,
-    { { spv_operand_type_t::SPV_OPERAND_TYPE_ID,
-    { inst_id } },
-    { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
-    { member } },
-    { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
-    { decoration } },
-    { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
-    { decoration_value } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newDecoOp);
-  get_decoration_mgr()->AddDecoration(&*newDecoOp);
-  get_module()->AddAnnotationInst(std::move(newDecoOp));
-}
-
 std::unique_ptr<Instruction> InstrumentPass::NewLabel(uint32_t label_id) {
   std::unique_ptr<Instruction> newLabel(
       new Instruction(context(), SpvOpLabel, 0, label_id, {}));
@@ -406,6 +362,7 @@ uint32_t InstrumentPass::GetOutputBufferBinding() {
 // Return id for output buffer
 uint32_t InstrumentPass::GetOutputBufferId() {
   if (output_buffer_id_ == 0) {
+    analysis::DecorationManager* deco_mgr = context()->get_decoration_mgr();
     analysis::TypeManager* type_mgr = context()->get_type_mgr();
     analysis::Integer uint_ty(32, false);
     analysis::Type* reg_uint_ty = type_mgr->GetRegisteredType(&uint_ty);
@@ -415,11 +372,11 @@ uint32_t InstrumentPass::GetOutputBufferId() {
     analysis::Struct obuf_ty({ reg_uint_ty, reg_uint_rarr_ty });
     analysis::Type* reg_obuf_ty = type_mgr->GetRegisteredType(&obuf_ty);
     uint32_t obufTyId = type_mgr->GetTypeInstruction(reg_obuf_ty);
-    AddDecoration(obufTyId, SpvDecorationBlock);
-    AddMemberDecoration(obufTyId, kDebugOutputSizeOffset, SpvDecorationOffset,
-        0);
-    AddMemberDecoration(obufTyId, kDebugOutputDataOffset, SpvDecorationOffset,
-        4);
+    deco_mgr->AddDecoration(obufTyId, SpvDecorationBlock);
+    deco_mgr->AddMemberDecoration(obufTyId, kDebugOutputSizeOffset,
+        SpvDecorationOffset, 0);
+    deco_mgr->AddMemberDecoration(obufTyId, kDebugOutputDataOffset,
+        SpvDecorationOffset, 4);
     uint32_t obufTyPtrId_ = type_mgr->FindPointerToType(obufTyId,
         SpvStorageClassStorageBuffer);
     output_buffer_id_ = TakeNextId();
@@ -430,8 +387,9 @@ uint32_t InstrumentPass::GetOutputBufferId() {
                 { SpvStorageClassStorageBuffer } } }));
     get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
     get_module()->AddGlobalValue(std::move(newVarOp));
-    AddDecorationVal(output_buffer_id_, SpvDecorationDescriptorSet, desc_set_);
-    AddDecorationVal(output_buffer_id_, SpvDecorationBinding,
+    deco_mgr->AddDecorationVal(output_buffer_id_, SpvDecorationDescriptorSet,
+        desc_set_);
+    deco_mgr->AddDecorationVal(output_buffer_id_, SpvDecorationBinding,
         GetOutputBufferBinding());
   }
   return output_buffer_id_;
@@ -505,7 +463,8 @@ uint32_t InstrumentPass::GetBuiltinVarId(uint32_t builtin, uint32_t type_id,
             { SpvStorageClassInput } } }));
   get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
   get_module()->AddGlobalValue(std::move(newVarOp));
-  AddDecorationVal(*var_id, SpvDecorationBuiltIn, builtin);
+  get_decoration_mgr()->AddDecorationVal(*var_id, SpvDecorationBuiltIn,
+      builtin);
   return *var_id;
 }
 
