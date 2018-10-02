@@ -129,9 +129,6 @@ class InstrumentPass : public Pass {
     uint32_t value_id,
     InstructionBuilder* builder);
 
-  // Return id of pointer to builtin |builtin_val|.
-  uint32_t FindBuiltin(uint32_t builtin_val);
-
   // Return new label.
   std::unique_ptr<Instruction> NewLabel(uint32_t label_id);
 
@@ -155,19 +152,6 @@ class InstrumentPass : public Pass {
 
   // Return id for debug output buffer
   uint32_t GetOutputBufferId();
-
-  // Return id for variable with |builtin| decoration. Create if it
-  // doesn't exist.
-  uint32_t GetBuiltinVarId(uint32_t builtin, uint32_t type_id, uint32_t* var_id);
-
-  // Return id for VertexId variable
-  uint32_t GetVertexId();
-
-  // Return id for InstanceId variable
-  uint32_t GetInstanceId();
-
-  // Return id for FragCoord variable
-  uint32_t GetFragCoordId();
 
   // Return id for v4float type
   uint32_t GetVec4FloatId();

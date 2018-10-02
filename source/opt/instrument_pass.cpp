@@ -112,36 +112,6 @@ void InstrumentPass::MovePostludeCode(
   }
 }
 
-uint32_t InstrumentPass::FindBuiltin(uint32_t builtin_val) {
-  for (auto& a : get_module()->annotations()) {
-    if (a.opcode() == SpvOpDecorate) {
-      if (a.GetSingleWordInOperand(kSpvDecorateDecorationInIdx) !=
-          SpvDecorationBuiltIn)
-        continue;
-      if (a.GetSingleWordInOperand(kSpvDecorateBuiltinInIdx) != builtin_val)
-        continue;
-      uint32_t target_id = a.GetSingleWordInOperand(kSpvDecorateTargetIdInIdx);
-      // TODO(greg-lunarg): Support group builtins
-      Instruction* b_var = context()->get_def_use_mgr()->GetDef(target_id);
-      if (b_var->opcode() != SpvOpVariable)
-        assert(false && "unexpected group builtin");
-      return target_id;
-    }
-    else if (a.opcode() == SpvOpMemberDecorate) {
-      if (a.GetSingleWordInOperand(kSpvMemberDecorateDecorationInIdx) !=
-          SpvDecorationBuiltIn)
-        continue;
-      if (a.GetSingleWordInOperand(kSpvMemberDecorateBuiltinInIdx) !=
-          builtin_val)
-        continue;
-      // TODO(greg-lunarg): Support member builtins
-      assert(false && "unexpected member builtin");
-      return 0;
-    }
-  }
-  return 0;
-}
-
 std::unique_ptr<Instruction> InstrumentPass::NewLabel(uint32_t label_id) {
   std::unique_ptr<Instruction> newLabel(
       new Instruction(context(), SpvOpLabel, 0, label_id, {}));
@@ -244,10 +214,10 @@ void InstrumentPass::GenVertDebugOutputCode(
     uint32_t base_offset_id,
     InstructionBuilder* builder) {
   // Load and store VertexId and InstanceId
-  GenBuiltinIdOutputCode(GetVertexId(), kInstVertOutVertexId,
-      base_offset_id, builder);
-  GenBuiltinIdOutputCode(GetInstanceId(), kInstVertOutInstanceId,
-      base_offset_id, builder);
+  GenBuiltinIdOutputCode(context()->GetBuiltinVarId(SpvBuiltInVertexId),
+      kInstVertOutVertexId, base_offset_id, builder);
+  GenBuiltinIdOutputCode(context()->GetBuiltinVarId(SpvBuiltInInstanceId),
+      kInstVertOutInstanceId, base_offset_id, builder);
 }
 
 void InstrumentPass::GenFragDebugOutputCode(
@@ -255,7 +225,7 @@ void InstrumentPass::GenFragDebugOutputCode(
     InstructionBuilder* builder) {
   // Load FragCoord and convert to Uint
   Instruction* frag_coord_inst = builder->AddUnaryOp(GetVec4FloatId(),
-      SpvOpLoad, GetFragCoordId());
+      SpvOpLoad, context()->GetBuiltinVarId(SpvBuiltInFragCoord));
   Instruction* uint_frag_coord_inst = builder->AddUnaryOp(GetVec4UintId(),
       SpvOpBitcast, frag_coord_inst->result_id());
   for (uint32_t u = 0; u < 2u; ++u)
@@ -444,43 +414,6 @@ uint32_t InstrumentPass::GetVoidId() {
   analysis::Void void_ty;
   analysis::Type* reg_void_ty = type_mgr->GetRegisteredType(&void_ty);
   return type_mgr->GetTypeInstruction(reg_void_ty);
-}
-
-uint32_t InstrumentPass::GetBuiltinVarId(uint32_t builtin, uint32_t type_id,
-    uint32_t* var_id) {
-  // If cached, return it.
-  if (*var_id != 0) return *var_id;
-  // Look for one in shader
-  *var_id = context()->FindBuiltinVar(builtin);
-  if (*var_id != 0) return *var_id;
-  // Create one
-  uint32_t varTyPtrId = context()->get_type_mgr()->FindPointerToType(
-      type_id, SpvStorageClassInput);
-  *var_id = TakeNextId();
-  std::unique_ptr<Instruction> newVarOp(
-      new Instruction(context(), SpvOpVariable, varTyPtrId, *var_id,
-          { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
-            { SpvStorageClassInput } } }));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
-  get_module()->AddGlobalValue(std::move(newVarOp));
-  get_decoration_mgr()->AddDecorationVal(*var_id, SpvDecorationBuiltIn,
-      builtin);
-  return *var_id;
-}
-
-uint32_t InstrumentPass::GetFragCoordId() {
-  return GetBuiltinVarId(SpvBuiltInFragCoord, GetVec4FloatId(),
-      &frag_coord_id_);
-}
-
-uint32_t InstrumentPass::GetVertexId() {
-  return GetBuiltinVarId(SpvBuiltInVertexId, GetUintId(),
-      &vertex_id_);
-}
-
-uint32_t InstrumentPass::GetInstanceId() {
-  return GetBuiltinVarId(SpvBuiltInInstanceId, GetUintId(),
-      &instance_id_);
 }
 
 uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,

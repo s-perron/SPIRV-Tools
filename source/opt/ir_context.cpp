@@ -26,6 +26,7 @@ static const int kSpvDecorateDecorationInIdx = 1;
 static const int kSpvDecorateBuiltinInIdx = 2;
 static const int kSpvMemberDecorateDecorationInIdx = 2;
 static const int kSpvMemberDecorateBuiltinInIdx = 3;
+static const int kEntryPointInterfaceInIdx = 3;
 
 namespace spvtools {
 namespace opt {
@@ -587,12 +588,6 @@ LoopDescriptor* IRContext::GetLoopDescriptor(const Function* f) {
 }
 
 uint32_t IRContext::FindBuiltinVar(uint32_t builtin) {
-  if (!AreAnalysesValid(kAnalysisBuiltinVarId))
-    ResetBuiltinAnalysis();
-  std::unordered_map<uint32_t, uint32_t>::iterator it =
-    builtin_var_id_map_.find(builtin);
-  if (it != builtin_var_id_map_.end())
-    return it->second;
   for (auto& a : module_->annotations()) {
     if (a.opcode() != SpvOpDecorate)
       continue;
@@ -605,10 +600,81 @@ uint32_t IRContext::FindBuiltinVar(uint32_t builtin) {
     Instruction* b_var = get_def_use_mgr()->GetDef(target_id);
     if (b_var->opcode() != SpvOpVariable)
       continue;
-    builtin_var_id_map_[builtin] = target_id;
     return target_id;
   }
   return 0;
+}
+
+void IRContext::AddVarToEntryPoints(uint32_t var_id) {
+  uint32_t ocnt = 0;
+  for (auto& e : module()->entry_points()) {
+    bool found = false;
+    e.ForEachInOperand([&ocnt, &found, &var_id](const uint32_t* idp) {
+      if (ocnt >= kEntryPointInterfaceInIdx) {
+        if (*idp == var_id) found = true;
+      }
+      ++ocnt;
+    });
+    if (!found) {
+      e.AddOperand({ SPV_OPERAND_TYPE_ID,{ var_id } });
+      get_def_use_mgr()->AnalyzeInstDefUse(&e);
+    }
+  }
+}
+
+uint32_t IRContext::GetBuiltinVarId(uint32_t builtin) {
+  if (!AreAnalysesValid(kAnalysisBuiltinVarId))
+    ResetBuiltinAnalysis();
+  // If cached, return it.
+  std::unordered_map<uint32_t, uint32_t>::iterator it =
+      builtin_var_id_map_.find(builtin);
+  if (it != builtin_var_id_map_.end())
+    return it->second;
+  // Look for one in shader
+  uint32_t var_id = FindBuiltinVar(builtin);
+  if (var_id == 0) {
+    // If not found, create it
+    // TODO(greg-lunarg): Add support for all builtins
+    analysis::TypeManager* type_mgr = get_type_mgr();
+    analysis::Type* reg_type;
+    switch (builtin) {
+      case SpvBuiltInFragCoord:
+      {
+        analysis::Float float_ty(32);
+        analysis::Type* reg_float_ty = type_mgr->GetRegisteredType(&float_ty);
+        analysis::Vector v4float_ty(reg_float_ty, 4);
+        reg_type = type_mgr->GetRegisteredType(&v4float_ty);
+        break;
+      }
+      case SpvBuiltInVertexId:
+      case SpvBuiltInInstanceId:
+      {
+        analysis::Integer uint_ty(32, false);
+        reg_type = type_mgr->GetRegisteredType(&uint_ty);
+        break;
+      }
+      default:
+      {
+        assert(false && "unhandled builtin");
+        return 0;
+      }
+    }
+    uint32_t type_id = type_mgr->GetTypeInstruction(reg_type);
+    uint32_t varTyPtrId = type_mgr->FindPointerToType(
+        type_id, SpvStorageClassInput);
+    var_id = TakeNextId();
+    std::unique_ptr<Instruction> newVarOp(
+        new Instruction(this, SpvOpVariable, varTyPtrId, var_id,
+            { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
+              { SpvStorageClassInput } } }));
+    get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
+    module()->AddGlobalValue(std::move(newVarOp));
+    get_decoration_mgr()->AddDecorationVal(var_id, SpvDecorationBuiltIn,
+        builtin);
+    AddVarToEntryPoints(var_id);
+  }
+  builtin_var_id_map_[builtin] = var_id;
+  return var_id;
 }
 
 // Gets the dominator analysis for function |f|.

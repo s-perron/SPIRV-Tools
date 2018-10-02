@@ -458,8 +458,9 @@ class IRContext {
   }
 
   // Return id of variable only decorated with |builtin|, if in module.
-  // Return 0 otherwise.
-  uint32_t FindBuiltinVar(uint32_t builtin);
+  // Create variable and return its id otherwise. If builtin not currently
+  // supported, return 0.
+  uint32_t GetBuiltinVarId(uint32_t builtin);
 
  private:
   // Builds the def-use manager from scratch, even if it was already valid.
@@ -554,6 +555,13 @@ class IRContext {
   // Returns true if it is suppose to be valid but it is incorrect.  Returns
   // true if the cfg is invalidated.
   bool CheckCFG();
+
+  // Return id of variable only decorated with |builtin|, if in module.
+  // Return 0 otherwise.
+  uint32_t FindBuiltinVar(uint32_t builtin);
+
+  // Add |var_id| to all entry points in module.
+  void AddVarToEntryPoints(uint32_t var_id);
 
   // The SPIR-V syntax context containing grammar tables for opcodes and
   // operands.
