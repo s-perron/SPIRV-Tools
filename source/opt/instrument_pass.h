@@ -178,7 +178,7 @@ class InstrumentPass : public Pass {
     std::queue<uint32_t>* roots,
     uint32_t stage_idx);
 
-  // Gen code into |new_blk_ptr| to write |field_value_id| into debug output
+  // Gen code into |builder| to write |field_value_id| into debug output
   // buffer at |base_offset_id| + |field_offset|.
   void GenDebugOutputFieldCode(
     uint32_t base_offset_id,
@@ -186,7 +186,7 @@ class InstrumentPass : public Pass {
     uint32_t field_value_id,
     InstructionBuilder* builder);
 
-  // Generate instructions into |new_blk_ptr| which will write the members
+  // Generate instructions into |builder| which will write the members
   // of the debug output record common for all stages and validations at
   // |base_off|.
   void GenCommonDebugOutputCode(
@@ -197,7 +197,7 @@ class InstrumentPass : public Pass {
     uint32_t base_off,
     InstructionBuilder* builder);
 
-  // Generate instructions into |new_blk_ptr| which will write
+  // Generate instructions into |builder| which will write
   // |uint_frag_coord_id| at |component| of the record at |base_offset_id| of
   // the debug output buffer .
   void GenFragCoordEltDebugOutputCode(
@@ -206,21 +206,21 @@ class InstrumentPass : public Pass {
     uint32_t component,
     InstructionBuilder* builder);
 
-  // Generate instructions into |new_blk_ptr| which will write the vertex-
-  // shader-specific members of the debug output buffer at |base_off|.
+  // Generate instructions into |builder| which will load the uint |builtin_id|
+  // and write it into the debug output buffer at |base_off| + |builtin_off|.
   void GenBuiltinIdOutputCode(
     uint32_t builtin_id,
     uint32_t builtin_off,
     uint32_t base_off,
     InstructionBuilder* builder);
 
-  // Generate instructions into |new_blk_ptr| which will write the vertex-
+  // Generate instructions into |builder| which will write the vertex-
   // shader-specific members of the debug output buffer at |base_off|.
   void GenVertDebugOutputCode(
     uint32_t base_off,
     InstructionBuilder* builder);
 
-  // Generate instructions into |new_blk_ptr| which will write the fragment-
+  // Generate instructions into |builder| which will write the fragment-
   // shader-specific members of the debug output buffer at |base_off|.
   void GenFragDebugOutputCode(
     uint32_t base_off,
