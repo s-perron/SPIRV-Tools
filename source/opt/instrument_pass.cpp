@@ -619,7 +619,10 @@ void InstrumentPass::AddVarToEntryPoints(uint32_t var_id) {
       }
       ++ocnt;
     });
-    if (!found) e.AddOperand({ SPV_OPERAND_TYPE_ID,{ var_id } });
+    if (!found) {
+      e.AddOperand({ SPV_OPERAND_TYPE_ID,{ var_id } });
+      get_def_use_mgr()->AnalyzeInstDefUse(&e);
+    }
   }
 }
 
