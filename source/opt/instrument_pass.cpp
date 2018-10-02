@@ -661,10 +661,6 @@ bool InstrumentPass::InstProcessEntryPointCallTree(
     roots.push(e.GetSingleWordInOperand(kEntryPointFunctionIdInIdx));
   }
   bool modified = InstProcessCallTreeFromRoots(pfn, &roots, eStage);
-  // Add builtins to all entry points that don't have them.
-  if (frag_coord_id_ != 0) AddVarToEntryPoints(frag_coord_id_);
-  if (vertex_id_ != 0) AddVarToEntryPoints(vertex_id_);
-  if (instance_id_ != 0) AddVarToEntryPoints(instance_id_);
   return modified;
 }
 
@@ -677,9 +673,6 @@ void InstrumentPass::InitializeInstrument() {
   uint_id_ = 0;
   v4uint_id_ = 0;
   bool_id_ = 0;
-  vertex_id_ = 0;
-  instance_id_ = 0;
-  frag_coord_id_ = 0;
 
   // clear collections
   id2function_.clear();

@@ -277,15 +277,6 @@ class InstrumentPass : public Pass {
   // param count for output function
   uint32_t output_func_param_cnt_;
 
-  // id for Vertex
-  uint32_t vertex_id_;
-
-  // id for Instance
-  uint32_t instance_id_;
-
-  // id for FragCoord
-  uint32_t frag_coord_id_;
-
   // id for v4float type
   uint32_t v4float_id_;
 
