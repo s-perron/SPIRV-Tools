@@ -130,18 +130,16 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   uint32_t ptrTypeId =
       varTypeInst->GetSingleWordInOperand(kSpvTypePointerTypeIdInIdx);
   Instruction* ptrTypeInst = get_def_use_mgr()->GetDef(ptrTypeId);
-  // TODO(greg-lunarg): Check descriptor index against runtime array
-  // size.
   if (ptrTypeInst->opcode() != SpvOpTypeArray)
     return;
-  uint32_t errorId = GetUintConstantId(kInstErrorBindlessBounds);
-  uint32_t lengthId =
-    ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
   // Generate full runtime bounds test code with true branch
   // being full reference and false branch being debug output and zero
   // for the referenced value.
   MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
   InstructionBuilder builder(context(), &*new_blk_ptr, kInstPreservedAnalyses);
+  uint32_t errorId = builder.GetUintConstantId(kInstErrorBindlessBounds);
+  uint32_t lengthId =
+    ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
   Instruction* ult_inst = builder.AddBinaryOp(GetBoolId(), SpvOpULessThan,
       indexId, lengthId);
   uint32_t mergeBlkId = TakeNextId();

@@ -305,8 +305,8 @@ class InstructionBuilder {
 
   // Adds a signed int32 constant to the binary.
   // The |value| parameter is the constant value to be added.
-  Instruction* Add32BitSignedIntegerConstant(int32_t value) {
-    return Add32BitConstantInteger<int32_t>(value, true);
+  Instruction* GetSintConstant(int32_t value) {
+    return GetIntConstant<int32_t>(value, true);
   }
 
   // Create a composite construct.
@@ -326,8 +326,13 @@ class InstructionBuilder {
   }
   // Adds an unsigned int32 constant to the binary.
   // The |value| parameter is the constant value to be added.
-  Instruction* Add32BitUnsignedIntegerConstant(uint32_t value) {
-    return Add32BitConstantInteger<uint32_t>(value, false);
+  Instruction* GetUintConstant(uint32_t value) {
+    return GetIntConstant<uint32_t>(value, false);
+  }
+
+  uint32_t GetUintConstantId(uint32_t value) {
+    Instruction* uint_inst = GetUintConstant(value);
+    return uint_inst->result_id();
   }
 
   // Adds either a signed or unsigned 32 bit integer constant to the binary
@@ -335,7 +340,7 @@ class InstructionBuilder {
   // signed constant otherwise as an unsigned constant. If |sign| is false the
   // value must not be a negative number.
   template <typename T>
-  Instruction* Add32BitConstantInteger(T value, bool sign) {
+  Instruction* GetIntConstant(T value, bool sign) {
     // Assert that we are not trying to store a negative number in an unsigned
     // type.
     if (!sign)

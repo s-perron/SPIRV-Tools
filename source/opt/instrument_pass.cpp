@@ -157,10 +157,11 @@ void InstrumentPass::GenDebugOutputFieldCode(
   uint32_t val_id = GenUintCastCode(field_value_id, builder);
   // Store value
   Instruction* data_idx_inst = builder->AddBinaryOp(GetUintId(), SpvOpIAdd,
-      base_offset_id, GetUintConstantId(field_offset));
+      base_offset_id, builder->GetUintConstantId(field_offset));
   Instruction* achain_inst = builder->AddTernaryOp(GetOutputBufferUintPtrId(),
       SpvOpAccessChain, GetOutputBufferId(),
-      GetUintConstantId(kDebugOutputDataOffset), data_idx_inst->result_id());
+      builder->GetUintConstantId(kDebugOutputDataOffset),
+      data_idx_inst->result_id());
   (void) builder->AddBinaryOp(0, SpvOpStore, achain_inst->result_id(), val_id);
 }
 
@@ -173,10 +174,10 @@ void InstrumentPass::GenCommonDebugOutputCode(
     InstructionBuilder* builder) {
   // Store record size
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutSize,
-      GetUintConstantId(record_sz), builder);
+      builder->GetUintConstantId(record_sz), builder);
   // Store Shader Id
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutShaderId,
-      GetUintConstantId(shader_id_), builder);
+      builder->GetUintConstantId(shader_id_), builder);
   // Store Function Idx
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutFunctionIdx,
       func_id, builder);
@@ -185,7 +186,7 @@ void InstrumentPass::GenCommonDebugOutputCode(
       inst_id, builder);
   // Store Stage Idx
   GenDebugOutputFieldCode(base_offset_id, kInstCommonOutStageIdx,
-      GetUintConstantId(stage_idx), builder);
+      builder->GetUintConstantId(stage_idx), builder);
 }
 
 void InstrumentPass::GenFragCoordEltDebugOutputCode(
@@ -254,8 +255,9 @@ void InstrumentPass::GenDebugOutputCode(
   // validation ids as args.
   uint32_t val_id_cnt = static_cast<uint32_t>(validation_ids.size());
   uint32_t output_func_id = GetOutputFunctionId(stage_idx, val_id_cnt);
-  std::vector<uint32_t> args = { output_func_id, GetUintConstantId(func_idx),
-      GetUintConstantId(instruction_idx) };
+  std::vector<uint32_t> args = { output_func_id,
+      builder->GetUintConstantId(func_idx),
+      builder->GetUintConstantId(instruction_idx) };
   (void) args.insert(args.end(), validation_ids.begin(), validation_ids.end());
   (void) builder->AddNaryOp(GetVoidId(), SpvOpFunctionCall, args);
 }
@@ -466,19 +468,19 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     Instruction* obuf_curr_sz_ac_inst = builder.AddBinaryOp(
         GetOutputBufferUintPtrId(),
         SpvOpAccessChain, GetOutputBufferId(),
-        GetUintConstantId(kDebugOutputSizeOffset));
+        builder.GetUintConstantId(kDebugOutputSizeOffset));
     // Fetch the current debug buffer written size atomically, adding the
     // size of the record to be written.
     Instruction* obuf_curr_sz_inst = builder.AddQuadOp(GetUintId(),
         SpvOpAtomicIAdd,
         obuf_curr_sz_ac_inst->result_id(),
-        GetUintConstantId(SpvScopeInvocation),
-        GetUintConstantId(SpvMemoryAccessMaskNone),
-        GetUintConstantId(obuf_record_sz));
+        builder.GetUintConstantId(SpvScopeInvocation),
+        builder.GetUintConstantId(SpvMemoryAccessMaskNone),
+        builder.GetUintConstantId(obuf_record_sz));
     uint32_t obuf_curr_sz_id = obuf_curr_sz_inst->result_id();
     // Compute new written size
     Instruction* obuf_new_sz_inst = builder.AddBinaryOp(GetUintId(), SpvOpIAdd,
-        obuf_curr_sz_id, GetUintConstantId(obuf_record_sz));
+        obuf_curr_sz_id, builder.GetUintConstantId(obuf_record_sz));
     // Fetch the data bound
     Instruction* obuf_bnd_inst = builder.AddIdLiteralOp(GetUintId(),
         SpvOpArrayLength, GetOutputBufferId(), kDebugOutputDataOffset);
