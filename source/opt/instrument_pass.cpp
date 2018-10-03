@@ -119,16 +119,6 @@ std::unique_ptr<Instruction> InstrumentPass::NewLabel(uint32_t label_id) {
   return newLabel;
 }
 
-uint32_t InstrumentPass::GetUintConstantId(uint32_t u) {
-  analysis::TypeManager* type_mgr = context()->get_type_mgr();
-  analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
-  analysis::Integer uint_ty(32, false);
-  analysis::Type* reg_uint_ty = type_mgr->GetRegisteredType(&uint_ty);
-  const analysis::Constant* uint_const = const_mgr->GetConstant(reg_uint_ty, {u});
-  Instruction* uint_inst = const_mgr->GetDefiningInstruction(uint_const);
-  return uint_inst->result_id();
-}
-
 uint32_t InstrumentPass::GenUintCastCode(
     uint32_t val_id,
     InstructionBuilder* builder) {

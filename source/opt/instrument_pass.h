@@ -120,9 +120,6 @@ class InstrumentPass : public Pass {
     const std::vector<uint32_t> &validation_ids,
     InstructionBuilder* builder);
 
-  // Return id for unsigned int constant value |u|.
-  uint32_t GetUintConstantId(uint32_t u);
-
   // Generate code to cast |value_id| to unsigned, if needed. Return
   // an id to the unsigned equivalent.
   uint32_t GenUintCastCode(
