@@ -202,9 +202,6 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   uint32_t lastInvalidBlkId = new_blk_ptr->GetLabelInst()->result_id();
   // Gen zero for invalid  reference
   uint32_t refTypeId = ref_inst_itr->type_id();
-  uint32_t nullId = 0;
-  if (newRefId != 0)
-    nullId = GetNullId(refTypeId);
   // Close invalid block and gen merge block
   (void) builder.AddBranch(mergeBlkId);
   new_blocks->push_back(std::move(new_blk_ptr));
@@ -215,8 +212,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   // reference before reusing its id.
   context()->KillInst(&*ref_inst_itr);
   if (newRefId != 0)
-    (void) builder.AddPhi(refTypeId,
-        { newRefId, validBlkId, nullId, lastInvalidBlkId }, refResultId);
+    (void) builder.AddPhi(refTypeId, { newRefId, validBlkId,
+        builder.GetNullId(refTypeId), lastInvalidBlkId }, refResultId);
   MovePostludeCode(ref_block_itr, &new_blk_ptr);
   // Add remainder/merge block to new blocks
   new_blocks->push_back(std::move(new_blk_ptr));

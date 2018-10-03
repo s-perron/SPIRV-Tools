@@ -132,9 +132,6 @@ class InstrumentPass : public Pass {
   // Return new label.
   std::unique_ptr<Instruction> NewLabel(uint32_t label_id);
 
-  // Returns the id for the null constant value of |type_id|.
-  uint32_t GetNullId(uint32_t type_id);
-
   // Return id for 32-bit unsigned type
   uint32_t GetUintId();
 
