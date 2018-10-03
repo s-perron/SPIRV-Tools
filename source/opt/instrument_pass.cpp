@@ -115,7 +115,7 @@ void InstrumentPass::MovePostludeCode(
 std::unique_ptr<Instruction> InstrumentPass::NewLabel(uint32_t label_id) {
   std::unique_ptr<Instruction> newLabel(
       new Instruction(context(), SpvOpLabel, 0, label_id, {}));
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newLabel);
+  get_def_use_mgr()->AnalyzeInstDef(&*newLabel);
   return newLabel;
 }
 
