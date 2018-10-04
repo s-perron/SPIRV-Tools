@@ -68,11 +68,12 @@ void InstrumentPass::MovePreludeCode(
     std::unique_ptr<BasicBlock>* new_blk_ptr) {
   preCallSB_.clear();
   postCallSB_.clear();
-  // Reuse label from ref block. Kill previous label
-  // before reusing.
+  // Initialize new block. Replace all uses of original block with
+  // new block.
   uint32_t ref_blk_id = ref_block_itr->id();
-  context()->KillInst(ref_block_itr->GetLabelInst());
-  new_blk_ptr->reset(new BasicBlock(NewLabel(ref_blk_id)));
+  uint32_t new_blk_id = TakeNextId();
+  new_blk_ptr->reset(new BasicBlock(NewLabel(new_blk_id)));
+  context()->ReplaceAllUsesWith(ref_blk_id, new_blk_id);
   // Move contents of original ref block up to ref instruction.
   for (auto cii = ref_block_itr->begin(); cii != ref_inst_itr;
       cii = ref_block_itr->begin()) {
@@ -115,7 +116,7 @@ void InstrumentPass::MovePostludeCode(
 std::unique_ptr<Instruction> InstrumentPass::NewLabel(uint32_t label_id) {
   std::unique_ptr<Instruction> newLabel(
       new Instruction(context(), SpvOpLabel, 0, label_id, {}));
-  get_def_use_mgr()->AnalyzeInstDef(&*newLabel);
+  get_def_use_mgr()->AnalyzeInstDefUse(&*newLabel);
   return newLabel;
 }
 
@@ -286,10 +287,16 @@ void InstrumentPass::UpdateSucceedingPhis(
   const_last_block.ForEachSuccessorLabel(
       [&firstId, &lastId, this](const uint32_t succ) {
         BasicBlock* sbp = this->id2block_[succ];
-        sbp->ForEachPhiInst([&firstId, &lastId](Instruction* phi) {
-          phi->ForEachInId([&firstId, &lastId](uint32_t* id) {
-            if (*id == firstId) *id = lastId;
+        sbp->ForEachPhiInst([&firstId, &lastId, this](Instruction* phi) {
+          bool changed = false;
+          phi->ForEachInId([&firstId, &lastId, &changed](uint32_t* id) {
+            if (*id == firstId) {
+              *id = lastId;
+              changed = true;
+            }
           });
+          if (changed)
+            get_def_use_mgr()->AnalyzeInstUse(phi);
         });
       });
 }
@@ -441,7 +448,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     std::unique_ptr<Instruction> test_label(NewLabel(test_blk_id));
     std::unique_ptr<BasicBlock> new_blk_ptr = MakeUnique<BasicBlock>(
         std::move(test_label));
-    InstructionBuilder builder(context(), &*new_blk_ptr, kInstPreservedAnalyses);
+    InstructionBuilder builder(context(), &*new_blk_ptr, GetPreservedAnalyses());
     // Gen test if debug output buffer size will not be exceeded.
     uint32_t obuf_record_sz = GetStageOutputRecordSize(stage_idx) +
         val_spec_param_cnt;
@@ -558,7 +565,8 @@ bool InstrumentPass::InstrumentFunction(Function* func, uint32_t stage_idx,
       size_t newBlocksSize = newBlocks.size();
       assert(newBlocksSize > 1);
       UpdateSucceedingPhis(newBlocks);
-      // Replace original block with new block(s).
+      // Replace original block with new block(s)
+      context()->KillInst(bi->GetLabelInst());
       bi = bi.Erase();
       for (auto& bb : newBlocks) {
         bb->SetParent(func);

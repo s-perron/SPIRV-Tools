@@ -41,10 +41,6 @@ static const uint32_t kInstErrorBindlessUninitialized = 1;
 static const uint32_t kDebugOutputBindingBindless = 0;
 static const uint32_t kDebugInputBindingBindless = 1;
 
-// Preserved Analyses
-static const IRContext::Analysis kInstPreservedAnalyses = 
-    IRContext::kAnalysisDefUse;
-
 // This is a base class to assist in the creation of passes which instrument
 // modules. More specifically, passes which replace instructions with a larger
 // and more capable set of instructions. Commonly, these new instructions will
@@ -80,6 +76,10 @@ class InstrumentPass : public Pass {
     std::vector<std::unique_ptr<BasicBlock>>*)>;
 
   virtual ~InstrumentPass() = default;
+
+  IRContext::Analysis GetPreservedAnalyses() override {
+    return IRContext::kAnalysisDefUse;
+  }
 
  protected:
   // Create instrumentation pass which utilizes descriptor set |desc_set|

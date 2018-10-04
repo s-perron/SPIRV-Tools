@@ -136,7 +136,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   // being full reference and false branch being debug output and zero
   // for the referenced value.
   MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-  InstructionBuilder builder(context(), &*new_blk_ptr, kInstPreservedAnalyses);
+  InstructionBuilder builder(context(), &*new_blk_ptr, GetPreservedAnalyses());
   uint32_t errorId = builder.GetUintConstantId(kInstErrorBindlessBounds);
   uint32_t lengthId =
     ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);
@@ -207,13 +207,15 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   new_blocks->push_back(std::move(new_blk_ptr));
   new_blk_ptr.reset(new BasicBlock(std::move(mergeLabel)));
   builder.SetInsertPoint(&*new_blk_ptr);
-  // Gen phi of new reference and zero, if necessary. Use result id of
-  // original reference so we don't have to do a replace. Kill original
-  // reference before reusing its id.
+  // Gen phi of new reference and zero, if necessary, and replace the
+  // result id of the original reference with that of the Phi. Kill original
+  // reference and move in remainder of original block.
+  if (newRefId != 0) {
+    Instruction* phi_inst = builder.AddPhi(refTypeId, { newRefId, validBlkId,
+        builder.GetNullId(refTypeId), lastInvalidBlkId });
+    context()->ReplaceAllUsesWith(refResultId, phi_inst->result_id());
+  }
   context()->KillInst(&*ref_inst_itr);
-  if (newRefId != 0)
-    (void) builder.AddPhi(refTypeId, { newRefId, validBlkId,
-        builder.GetNullId(refTypeId), lastInvalidBlkId }, refResultId);
   MovePostludeCode(ref_block_itr, &new_blk_ptr);
   // Add remainder/merge block to new blocks
   new_blocks->push_back(std::move(new_blk_ptr));
