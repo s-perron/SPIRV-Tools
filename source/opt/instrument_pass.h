@@ -80,7 +80,10 @@ class InstrumentPass : public Pass {
   IRContext::Analysis GetPreservedAnalyses() override {
     return IRContext::kAnalysisDefUse |
         IRContext::kAnalysisInstrToBlockMapping |
-        IRContext::kAnalysisDecorations;
+        IRContext::kAnalysisDecorations |
+        IRContext::kAnalysisCombinators |
+        IRContext::kAnalysisNameMap |
+        IRContext::kAnalysisBuiltinVarId;
   }
 
  protected:
