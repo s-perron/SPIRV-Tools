@@ -291,6 +291,7 @@ const std::vector<std::string>& AllVulkan10Capabilities() {
     "Tessellation",
     "Float64",
     "Int64",
+    "Int64Atomics",
     "Int16",
     "TessellationPointSize",
     "GeometryPointSize",
@@ -332,6 +333,7 @@ const std::vector<std::string>& AllVulkan11Capabilities() {
     "Tessellation",
     "Float64",
     "Int64",
+    "Int64Atomics",
     "Int16",
     "TessellationPointSize",
     "GeometryPointSize",
@@ -2294,6 +2296,37 @@ OpFunctionEnd
   CompileSuccessfully(spirv, SPV_ENV_UNIVERSAL_1_0);
   EXPECT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_UNIVERSAL_1_0))
       << getDiagnosticString();
+}
+
+TEST_F(ValidateCapability, VulkanMemoryModelWithVulkanKHR) {
+  const std::string spirv = R"(
+OpCapability Shader
+OpCapability VulkanMemoryModelKHR
+OpCapability Linkage
+OpExtension "SPV_KHR_vulkan_memory_model"
+OpMemoryModel Logical VulkanKHR
+)";
+
+  CompileSuccessfully(spirv, SPV_ENV_UNIVERSAL_1_3);
+  EXPECT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_UNIVERSAL_1_3))
+      << getDiagnosticString();
+}
+
+TEST_F(ValidateCapability, VulkanMemoryModelWithGLSL450) {
+  const std::string spirv = R"(
+OpCapability Shader
+OpCapability VulkanMemoryModelKHR
+OpCapability Linkage
+OpExtension "SPV_KHR_vulkan_memory_model"
+OpMemoryModel Logical GLSL450
+)";
+
+  CompileSuccessfully(spirv, SPV_ENV_UNIVERSAL_1_3);
+  EXPECT_EQ(SPV_ERROR_INVALID_DATA,
+            ValidateInstructions(SPV_ENV_UNIVERSAL_1_3));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("VulkanMemoryModelKHR capability must only be "
+                        "specified if the VulkanKHR memory model is used"));
 }
 
 }  // namespace
