@@ -344,8 +344,7 @@ uint32_t InstrumentPass::GetOutputBufferId() {
             output_buffer_id_,
             { { spv_operand_type_t::SPV_OPERAND_TYPE_LITERAL_INTEGER,
                 { SpvStorageClassStorageBuffer } } }));
-    get_def_use_mgr()->AnalyzeInstDefUse(&*newVarOp);
-    get_module()->AddGlobalValue(std::move(newVarOp));
+    context()->AddGlobalValue(std::move(newVarOp));
     deco_mgr->AddDecorationVal(output_buffer_id_, SpvDecorationDescriptorSet,
         desc_set_);
     deco_mgr->AddDecorationVal(output_buffer_id_, SpvDecorationBinding,
@@ -528,7 +527,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
             0, 0, {}));
     get_def_use_mgr()->AnalyzeInstDefUse(&*func_end_inst);
     output_func->SetFunctionEnd(std::move(func_end_inst));
-    get_module()->AddFunction(std::move(output_func));
+    context()->AddFunction(std::move(output_func));
     output_func_param_cnt_ = param_cnt;
   }
   assert(param_cnt == output_func_param_cnt_ && "bad arg count");

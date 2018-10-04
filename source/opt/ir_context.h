@@ -837,10 +837,10 @@ void IRContext::AddType(std::unique_ptr<Instruction>&& t) {
 }
 
 void IRContext::AddGlobalValue(std::unique_ptr<Instruction>&& v) {
-  module()->AddGlobalValue(std::move(v));
   if (AreAnalysesValid(kAnalysisDefUse)) {
-    get_def_use_mgr()->AnalyzeInstDef(&*(--types_values_end()));
+    get_def_use_mgr()->AnalyzeInstDefUse(&*v);
   }
+  module()->AddGlobalValue(std::move(v));
 }
 
 void IRContext::AddFunction(std::unique_ptr<Function>&& f) {

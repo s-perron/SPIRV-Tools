@@ -187,8 +187,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   }
   newRefInst->SetInOperand(kSpvImageSampleImageIdInIdx, { newImageId });
   // Register new reference and add to new block
-  get_def_use_mgr()->AnalyzeInstDefUse(&*newRefInst);
-  new_blk_ptr->AddInstruction(std::move(newRefInst));
+  builder.AddInstruction(std::move(newRefInst));
   if (newRefId != 0)
     get_decoration_mgr()->CloneDecorations(refResultId, newRefId);
   // Close valid block and gen invalid block
