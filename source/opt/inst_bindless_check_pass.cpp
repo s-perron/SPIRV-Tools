@@ -136,7 +136,8 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   // being full reference and false branch being debug output and zero
   // for the referenced value.
   MovePreludeCode(ref_inst_itr, ref_block_itr, &new_blk_ptr);
-  InstructionBuilder builder(context(), &*new_blk_ptr, GetPreservedAnalyses());
+  InstructionBuilder builder(context(), &*new_blk_ptr,
+      IRContext::kAnalysisDefUse | IRContext::kAnalysisInstrToBlockMapping);
   uint32_t errorId = builder.GetUintConstantId(kInstErrorBindlessBounds);
   uint32_t lengthId =
     ptrTypeInst->GetSingleWordInOperand(kSpvTypeArrayLengthIdInIdx);

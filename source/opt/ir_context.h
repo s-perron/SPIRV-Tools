@@ -823,6 +823,9 @@ void IRContext::AddAnnotationInst(std::unique_ptr<Instruction>&& a) {
   if (AreAnalysesValid(kAnalysisDecorations)) {
     get_decoration_mgr()->AddDecoration(a.get());
   }
+  if (AreAnalysesValid(kAnalysisDefUse)) {
+    get_def_use_mgr()->AnalyzeInstDefUse(a.get());
+  }
   module()->AddAnnotationInst(std::move(a));
 }
 

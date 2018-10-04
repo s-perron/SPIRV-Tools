@@ -78,7 +78,9 @@ class InstrumentPass : public Pass {
   virtual ~InstrumentPass() = default;
 
   IRContext::Analysis GetPreservedAnalyses() override {
-    return IRContext::kAnalysisDefUse;
+    return IRContext::kAnalysisDefUse |
+        IRContext::kAnalysisInstrToBlockMapping |
+        IRContext::kAnalysisDecorations;
   }
 
  protected:

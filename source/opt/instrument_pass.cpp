@@ -321,7 +321,7 @@ uint32_t InstrumentPass::GetOutputBufferBinding() {
 // Return id for output buffer
 uint32_t InstrumentPass::GetOutputBufferId() {
   if (output_buffer_id_ == 0) {
-    analysis::DecorationManager* deco_mgr = context()->get_decoration_mgr();
+    analysis::DecorationManager* deco_mgr = get_decoration_mgr();
     analysis::TypeManager* type_mgr = context()->get_type_mgr();
     analysis::Integer uint_ty(32, false);
     analysis::Type* reg_uint_ty = type_mgr->GetRegisteredType(&uint_ty);
@@ -448,7 +448,8 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     std::unique_ptr<Instruction> test_label(NewLabel(test_blk_id));
     std::unique_ptr<BasicBlock> new_blk_ptr = MakeUnique<BasicBlock>(
         std::move(test_label));
-    InstructionBuilder builder(context(), &*new_blk_ptr, GetPreservedAnalyses());
+    InstructionBuilder builder(context(), &*new_blk_ptr,
+        IRContext::kAnalysisDefUse | IRContext::kAnalysisInstrToBlockMapping);
     // Gen test if debug output buffer size will not be exceeded.
     uint32_t obuf_record_sz = GetStageOutputRecordSize(stage_idx) +
         val_spec_param_cnt;

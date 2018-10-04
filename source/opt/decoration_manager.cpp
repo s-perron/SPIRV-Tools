@@ -290,9 +290,7 @@ void DecorationManager::AddDecoration(SpvOp opcode,
   IRContext* ctx = module_->context();
   std::unique_ptr<Instruction> newDecoOp(
     new Instruction(ctx, opcode, 0, 0, opnds));
-  ctx->get_def_use_mgr()->AnalyzeInstDefUse(&*newDecoOp);
-  AddDecoration(&*newDecoOp);
-  module_->AddAnnotationInst(std::move(newDecoOp));
+  ctx->AddAnnotationInst(std::move(newDecoOp));
 }
 
 void DecorationManager::AddDecoration(uint32_t inst_id, uint32_t decoration) {
