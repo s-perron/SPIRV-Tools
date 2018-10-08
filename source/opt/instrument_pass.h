@@ -311,9 +311,6 @@ class InstrumentPass : public Pass {
     uint32_t base_off,
     InstructionBuilder* builder);
 
-  // Return size of common and stage-specific output record members
-  uint32_t GetStageOutputRecordSize(uint32_t stage_idx);
-
   // Return true if instruction must be in the same block that its result
   // is used.
   bool IsSameBlockOp(const Instruction* inst) const;

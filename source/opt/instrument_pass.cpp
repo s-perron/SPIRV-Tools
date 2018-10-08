@@ -37,12 +37,13 @@ static const int kInstCommonParamCnt = 2;
 // Vertex Shader Output Record Offsets
 static const int kInstVertOutVertexId = 5;
 static const int kInstVertOutInstanceId = 6;
-static const int kInstVertOutRecordSize = 7;
 
 // Frag Shader Output Record Offsets
 static const int kInstFragOutFragCoordX = 5;
 static const int kInstFragOutFragCoordY = 6;
-static const int kInstFragOutRecordSize = 7;
+
+// Size of Common and Stage-specific Members
+static const int kInstStageOutRecordSize = 7;
 
 // Indices of operands in SPIR-V instructions
 static const int kSpvFunctionCallFunctionId = 2;
@@ -213,17 +214,6 @@ void InstrumentPass::GenFragDebugOutputCode(
   for (uint32_t u = 0; u < 2u; ++u)
     GenFragCoordEltDebugOutputCode(base_offset_id,
         uint_frag_coord_inst->result_id(), u, builder);
-}
-
-uint32_t InstrumentPass::GetStageOutputRecordSize(uint32_t stage_idx) {
-  // TODO(greg-lunarg): Add support for all stages
-  uint32_t size = 0;
-  switch (stage_idx) {
-    case SpvExecutionModelVertex:   size = kInstVertOutRecordSize; break;
-    case SpvExecutionModelFragment: size = kInstFragOutRecordSize; break;
-    default: assert(false && "unexpected stage"); break;
-  }
-  return size;
 }
 
 void InstrumentPass::GenDebugStreamWrite(
@@ -450,8 +440,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     InstructionBuilder builder(context(), &*new_blk_ptr,
         IRContext::kAnalysisDefUse | IRContext::kAnalysisInstrToBlockMapping);
     // Gen test if debug output buffer size will not be exceeded.
-    uint32_t obuf_record_sz = GetStageOutputRecordSize(stage_idx) +
-        val_spec_param_cnt;
+    uint32_t obuf_record_sz = kInstStageOutRecordSize + val_spec_param_cnt;
     Instruction* obuf_curr_sz_ac_inst = builder.AddBinaryOp(
         GetOutputBufferUintPtrId(),
         SpvOpAccessChain, GetOutputBufferId(),
@@ -493,15 +482,12 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
         stage_idx, obuf_curr_sz_id, &builder);
     // Generate stage-specific record members
     // TODO(greg-lunarg): Add support for all stages
-    uint32_t stage_offset = 0;
     switch (stage_idx) {
     case SpvExecutionModelFragment:
       GenFragDebugOutputCode(obuf_curr_sz_id, &builder);
-      stage_offset = kInstFragOutRecordSize;
       break;
     case SpvExecutionModelVertex:
       GenVertDebugOutputCode(obuf_curr_sz_id, &builder);
-      stage_offset = kInstVertOutRecordSize;
       break;
     default:
       assert(false && "unsupported stage");
@@ -509,7 +495,7 @@ uint32_t InstrumentPass::GetOutputFunctionId(uint32_t stage_idx,
     }
     // Gen writes of validation specific data
     for (uint32_t i = 0; i < val_spec_param_cnt; ++i) {
-      GenDebugOutputFieldCode(obuf_curr_sz_id, stage_offset + i,
+      GenDebugOutputFieldCode(obuf_curr_sz_id, kInstStageOutRecordSize + i,
           param_vec[kInstCommonOutFunctionIdx + i], &builder);
     }
     // Close write block and gen merge block
