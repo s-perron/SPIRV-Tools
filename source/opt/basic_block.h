@@ -198,7 +198,8 @@ class BasicBlock {
 
   // Splits this basic block into two. Returns a new basic block with label
   // |labelId| containing the instructions from |iter| onwards. Instructions
-  // prior to |iter| remain in this basic block.
+  // prior to |iter| remain in this basic block.  The new block will be added
+  // to the function immediately after the original block.
   BasicBlock* SplitBasicBlock(IRContext* context, uint32_t label_id,
                               iterator iter);
 
@@ -208,6 +209,10 @@ class BasicBlock {
   // |options| are the disassembly options. SPV_BINARY_TO_TEXT_OPTION_NO_HEADER
   // is always added to |options|.
   std::string PrettyPrint(uint32_t options = 0u) const;
+
+  // Dump this basic block on stderr.  Useful when running interactive
+  // debuggers.
+  void Dump() const;
 
  private:
   // The enclosing function.
