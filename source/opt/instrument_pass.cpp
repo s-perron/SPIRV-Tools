@@ -226,7 +226,7 @@ uint32_t InstrumentPass::GetStageOutputRecordSize(uint32_t stage_idx) {
   return size;
 }
 
-void InstrumentPass::GenDebugOutputCode(
+void InstrumentPass::GenDebugStreamWrite(
     uint32_t func_idx,
     uint32_t instruction_idx,
     uint32_t stage_idx,
@@ -312,7 +312,7 @@ uint32_t InstrumentPass::GetOutputBufferUintPtrId() {
 
 uint32_t InstrumentPass::GetOutputBufferBinding() {
   switch (validation_id_) {
-    case kInstValidationIdBindless: return kDebugOutputBindingBindless;
+    case kInstValidationIdBindless: return kDebugOutputBindingStream;
     default: assert(false && "unexpected validation id");
   }
   return 0;

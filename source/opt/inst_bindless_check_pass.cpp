@@ -196,7 +196,7 @@ void InstBindlessCheckPass::GenBindlessCheckCode(
   new_blk_ptr.reset(new BasicBlock(std::move(invalidLabel)));
   builder.SetInsertPoint(&*new_blk_ptr);
   uint32_t uIndexId = GenUintCastCode(indexId, &builder);
-  GenDebugOutputCode(function_idx, instruction_idx,
+  GenDebugStreamWrite(function_idx, instruction_idx,
       stage_idx, { errorId, uIndexId, lengthId }, &builder);
   // Remember last invalid block id
   uint32_t lastInvalidBlkId = new_blk_ptr->GetLabelInst()->result_id();
