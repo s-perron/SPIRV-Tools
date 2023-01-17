@@ -19,7 +19,7 @@ jobs:
       - name: Download dependencies
         run: python3 utils/git-sync-deps
       - name: Update dependencies
-        run: python3 utils/roll_deps.sh
+        run: utils/roll_deps.sh
 #      - name: create new 
 #        run: gh pr create ...
     
