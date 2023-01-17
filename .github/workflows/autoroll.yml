@@ -1,0 +1,37 @@
+name: Update dependencies
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      # Checkout the depot tools they are needed by roll_deps.sh
+
+      - name: Checkout depot tools
+        run: git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+
+      - name: Update PATH
+        run: echo "./depot_tools" >> $GITHUB_PATH
+
+      - name: Download dependencies
+        run: python3 utils/git-sync-deps
+
+      - name: Setup git user information
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "<>"
+
+      - name: Update dependencies
+        run: utils/roll_deps.sh
+
+      - name: create new 
+        run: gh pr create --base main -f -r s-perron
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+    
