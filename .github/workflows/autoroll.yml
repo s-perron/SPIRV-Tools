@@ -6,13 +6,14 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  update-dependencies:
+    name: Update dependencies
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
-      # Checkout the depot tools they are needed by roll_deps.sh
 
+      # Checkout the depot tools they are needed by roll_deps.sh
       - name: Checkout depot tools
         run: git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
 
@@ -24,8 +25,10 @@ jobs:
 
       - name: Setup git user information
         run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "<>"
+          # We should see if we can get another user name.
+          # Using my name and email for now because of the CLA.
+          git config user.name "Steven Perron"
+          git config user.email "<stevenperron@google.com>"
           git checkout -b roll_deps
 
       - name: Update dependencies
