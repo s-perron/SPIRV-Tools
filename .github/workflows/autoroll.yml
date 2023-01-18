@@ -31,11 +31,15 @@ jobs:
       - name: Update dependencies
         run: |
           utils/roll_deps.sh
-          git diff HEAD..origin/main --name-only >> $GITHUB_OUTPUT
+          if [[ `git diff HEAD..origin/main --name-only | wc -l` == 0]]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
         id: update_dependencies
      
       - name: Push changes and create PR
-#        if: join(steps.update_dependencies.outputs.*, '') == ''
+        if: steps.update_dependencies.outputs.changed == 'true'
         run: |
           git push --force --set-upstream origin roll_deps
           gh pr create --base main -f -r s-perron
