@@ -26,9 +26,14 @@ jobs:
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "<>"
+          git checkout -b roll_deps origin/main
 
       - name: Update dependencies
         run: utils/roll_deps.sh
+      
+      - name: Push changes
+        run: |
+          git push --force
 
       - name: create new 
         run: gh pr create --base main -f -r s-perron
