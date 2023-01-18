@@ -31,7 +31,7 @@ jobs:
       - name: Update dependencies
         run: |
           utils/roll_deps.sh
-          if [[ `git diff HEAD..origin/main --name-only | wc -l` == 0]]; then
+          if [[ `git diff HEAD..origin/main --name-only | wc -l` == 0 ]]; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
