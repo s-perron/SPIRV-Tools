@@ -25,10 +25,8 @@ jobs:
 
       - name: Setup git user information
         run: |
-          # We should see if we can get another user name.
-          # Using my name and email for now because of the CLA.
-          git config user.name "Steven Perron"
-          git config user.email "<stevenperron@google.com>"
+          git config user.name "GitHub Actions bot"
+          git config user.email "<>"
           git checkout -b roll_deps
 
       - name: Update dependencies
