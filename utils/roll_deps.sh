@@ -48,6 +48,9 @@ if [[ $(git diff --stat) != '' ]]; then
     exit 1
 fi
 
+# Create a new branch from origin/main
+git checkout -b roll_deps origin/main
+
 echo "*** Ignore messages about running 'git cl upload' ***"
 
 old_head=$(git rev-parse HEAD)

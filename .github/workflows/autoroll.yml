@@ -29,14 +29,14 @@ jobs:
           git checkout -b roll_deps
 
       - name: Update dependencies
-        run: utils/roll_deps.sh
-      
-      - name: Push changes
+        run: |
+          utils/roll_deps.sh
+     
+      - name: Check for new commits
+
+      - name: Push changes and create PR
         run: |
           git push --force --set-upstream origin roll_deps
-
-      - name: create new 
-        run: gh pr create --base main -f -r s-perron
+          gh pr create --base main -f -r s-perron
         env:
           GITHUB_TOKEN: ${{ github.token }}
-    
