@@ -7,7 +7,6 @@ on:
 
 jobs:
   build:
-    name: Get updated dependencies
     runs-on: ubuntu-latest
 
     steps:
