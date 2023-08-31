@@ -12,7 +12,7 @@ vars = {
   # Use protobufs before they gained the dependency on abseil
   'protobuf_revision': 'v21.12',
 
-  're2_revision': '9dc7ae7b52a17b75e3f9249ea85ba578bf42f255',
+  're2_revision': '523f9b097163895957f0fdd91cb8aa595c7f65a1',
   'spirv_headers_revision': '45fc02a6c67016b3e5ff6e4896a61544a40f90f8',
 }
 
