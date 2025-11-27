@@ -176,7 +176,8 @@ class CopyPropagateArrays : public MemPass {
   // Replaces all loads of |var_inst| with a load from |source| instead.
   // |insertion_pos| is a position where it is possible to construct the
   // address of |source| and also dominates all of the loads of |var_inst|.
-  void PropagateObject(Instruction* var_inst, MemoryObject* source,
+  // Returns false if the propagation failed.
+  bool PropagateObject(Instruction* var_inst, MemoryObject* source,
                        Instruction* insertion_pos);
 
   // Returns true if all of the references to |ptr_inst| can be rewritten and

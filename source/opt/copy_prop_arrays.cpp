@@ -104,10 +104,17 @@ Pass::Status CopyPropagateArrays::Process() {
       continue;
     }
 
-    if (CanUpdateUses(&*var_inst, source_object->GetPointerTypeId(this))) {
+    uint32_t pointer_type_id = source_object->GetPointerTypeId(this);
+    if (pointer_type_id == 0) {
+      return Status::Failure;
+    }
+
+    if (CanUpdateUses(&*var_inst, pointer_type_id)) {
       modified = true;
 
-      PropagateObject(&*var_inst, source_object.get(), store_inst);
+      if (!PropagateObject(&*var_inst, source_object.get(), store_inst)) {
+        return Status::Failure;
+      }
     }
   }
 
@@ -170,15 +177,16 @@ Instruction* CopyPropagateArrays::FindStoreInstruction(
   return store_inst;
 }
 
-void CopyPropagateArrays::PropagateObject(Instruction* var_inst,
+bool CopyPropagateArrays::PropagateObject(Instruction* var_inst,
                                           MemoryObject* source,
                                           Instruction* insertion_point) {
   assert(var_inst->opcode() == spv::Op::OpVariable &&
          "This function propagates variables.");
 
   Instruction* new_access_chain = BuildNewAccessChain(insertion_point, source);
+  if (!new_access_chain) return false;
   context()->KillNamesAndDecorates(var_inst);
-  UpdateUses(var_inst, new_access_chain);
+  return UpdateUses(var_inst, new_access_chain);
 }
 
 Instruction* CopyPropagateArrays::BuildNewAccessChain(
@@ -192,7 +200,7 @@ Instruction* CopyPropagateArrays::BuildNewAccessChain(
     return source->GetVariable();
   }
 
-  source->BuildConstants();
+  if (!source->BuildConstants()) return nullptr;
   std::vector<uint32_t> access_ids(source->AccessChain().size());
   std::transform(
       source->AccessChain().cbegin(), source->AccessChain().cend(),
@@ -699,6 +707,7 @@ bool CopyPropagateArrays::UpdateUses(Instruction* original_ptr_inst,
                 def_use_mgr->GetDef(use->GetSingleWordOperand(index + 1));
             auto* deref_expr_instr =
                 context()->get_debug_info_mgr()->DerefDebugExpression(dbg_expr);
+            if (!deref_expr_instr) return false;
             use->SetOperand(index + 1, {deref_expr_instr->result_id()});
 
             context()->AnalyzeUses(deref_expr_instr);
@@ -831,8 +840,7 @@ bool CopyPropagateArrays::UpdateUses(Instruction* original_ptr_inst,
           uint32_t pointee_type_id =
               pointer_type->GetSingleWordInOperand(kTypePointerPointeeInIdx);
           uint32_t copy = GenerateCopy(original_ptr_inst, pointee_type_id, use);
-          assert(copy != 0 &&
-                 "Should not be updating uses unless we know it can be done.");
+          if (copy == 0) return false;
 
           context()->ForgetUses(use);
           use->SetInOperand(index, {copy});
