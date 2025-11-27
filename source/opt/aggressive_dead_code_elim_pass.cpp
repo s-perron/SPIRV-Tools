@@ -767,7 +767,9 @@ Pass::Status AggressiveDCEPass::ProcessImpl() {
   if (!AllExtensionsSupported()) return Status::SuccessWithoutChange;
 
   // Eliminate Dead functions.
-  bool modified = EliminateDeadFunctions();
+  Status status = EliminateDeadFunctions();
+  if (status == Status::Failure) return Status::Failure;
+  bool modified = (status == Status::SuccessWithChange);
 
   if (InitializeModuleScopeLiveInstructions() == Pass::Status::Failure) {
     return Pass::Status::Failure;
@@ -813,15 +815,15 @@ Pass::Status AggressiveDCEPass::ProcessImpl() {
 
   // Cleanup all CFG including all unreachable blocks.
   for (Function& fp : *context()->module()) {
-    auto status = CFGCleanup(&fp);
-    if (status == Status::Failure) return Status::Failure;
-    if (status == Status::SuccessWithChange) modified = true;
+    auto cleanup_status = CFGCleanup(&fp);
+    if (cleanup_status == Status::Failure) return Status::Failure;
+    if (cleanup_status == Status::SuccessWithChange) modified = true;
   }
 
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
 
-bool AggressiveDCEPass::EliminateDeadFunctions() {
+Pass::Status AggressiveDCEPass::EliminateDeadFunctions() {
   // Identify live functions first. Those that are not live
   // are dead.
   std::unordered_set<const Function*> live_function_set;
@@ -835,15 +837,18 @@ bool AggressiveDCEPass::EliminateDeadFunctions() {
   for (auto funcIter = get_module()->begin();
        funcIter != get_module()->end();) {
     if (live_function_set.count(&*funcIter) == 0) {
+      if (eliminatedeadfunctionsutil::EliminateFunction(context(), &funcIter) ==
+          Pass::Status::Failure) {
+        return Pass::Status::Failure;
+      }
       modified = true;
-      funcIter =
-          eliminatedeadfunctionsutil::EliminateFunction(context(), &funcIter);
     } else {
       ++funcIter;
     }
   }
 
-  return modified;
+  return modified ? Pass::Status::SuccessWithChange
+                  : Pass::Status::SuccessWithoutChange;
 }
 
 bool AggressiveDCEPass::ProcessGlobalValues() {

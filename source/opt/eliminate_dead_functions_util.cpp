@@ -19,15 +19,18 @@ namespace opt {
 
 namespace eliminatedeadfunctionsutil {
 
-Module::iterator EliminateFunction(IRContext* context,
-                                   Module::iterator* func_iter) {
+Pass::Status EliminateFunction(IRContext* context,
+                               Module::iterator* func_iter) {
   bool first_func = *func_iter == context->module()->begin();
   bool seen_func_end = false;
   std::unordered_set<Instruction*> to_kill;
+  std::vector<Instruction*> insts_to_kill;
+  bool failure = false;
   (*func_iter)
       ->ForEachInst(
-          [context, first_func, func_iter, &seen_func_end,
-           &to_kill](Instruction* inst) {
+          [context, first_func, func_iter, &seen_func_end, &to_kill,
+           &failure, &insts_to_kill](Instruction* inst) {
+            if (failure) return;
             if (inst->opcode() == spv::Op::OpFunctionEnd) {
               seen_func_end = true;
             }
@@ -37,6 +40,10 @@ Module::iterator EliminateFunction(IRContext* context,
               assert(inst->IsNonSemanticInstruction());
               if (to_kill.find(inst) != to_kill.end()) return;
               std::unique_ptr<Instruction> clone(inst->Clone(context));
+              if (!clone) {
+                failure = true;
+                return;
+              }
               // Clear uses of "inst" to in case this moves a dependent chain of
               // instructions.
               context->get_def_use_mgr()->ClearInst(inst);
@@ -51,16 +58,22 @@ Module::iterator EliminateFunction(IRContext* context,
               inst->ToNop();
             } else if (to_kill.find(inst) == to_kill.end()) {
               context->CollectNonSemanticTree(inst, &to_kill);
-              context->KillInst(inst);
+              insts_to_kill.push_back(inst);
             }
           },
           true, true);
 
+  if (failure) return Pass::Status::Failure;
+
   for (auto* dead : to_kill) {
     context->KillInst(dead);
   }
+  for (auto* dead : insts_to_kill) {
+    context->KillInst(dead);
+  }
 
-  return func_iter->Erase();
+  *func_iter = func_iter->Erase();
+  return Pass::Status::SuccessWithChange;
 }
 
 }  // namespace eliminatedeadfunctionsutil

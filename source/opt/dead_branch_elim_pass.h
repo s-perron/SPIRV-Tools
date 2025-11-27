@@ -67,7 +67,7 @@ class DeadBranchElimPass : public MemPass {
   // invalid control flow.
   // TODO(greg-lunarg): Remove remaining constant conditional branches and dead
   // blocks.
-  bool EliminateDeadBranches(Function* func);
+  Status EliminateDeadBranches(Function* func);
 
   // Returns the basic block containing |id|.
   // Note: this pass only requires correct instruction block mappings for the
@@ -80,8 +80,8 @@ class DeadBranchElimPass : public MemPass {
   // It is careful not to eliminate backedges even if they are dead, but the
   // header is live. Likewise, unreachable merge blocks named in live merge
   // instruction must be retained (though they may be clobbered).
-  bool MarkLiveBlocks(Function* func,
-                      std::unordered_set<BasicBlock*>* live_blocks);
+  Status MarkLiveBlocks(Function* func,
+                        std::unordered_set<BasicBlock*>* live_blocks);
 
   // Checks for unreachable merge and continue blocks with live headers; those
   // blocks must be retained. Continues are tracked separately so that a live
@@ -107,7 +107,7 @@ class DeadBranchElimPass : public MemPass {
   //
   // |unreachable_continues| maps continue targets that cannot be reached to
   // merge instruction that declares them.
-  bool FixPhiNodesInLiveBlocks(
+  Status FixPhiNodesInLiveBlocks(
       Function* func, const std::unordered_set<BasicBlock*>& live_blocks,
       const std::unordered_map<BasicBlock*, BasicBlock*>&
           unreachable_continues);

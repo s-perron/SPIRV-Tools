@@ -16,6 +16,7 @@
 #define SOURCE_OPT_ELIMINATE_DEAD_FUNCTIONS_UTIL_H_
 
 #include "source/opt/ir_context.h"
+#include "source/opt/pass.h"
 
 namespace spvtools {
 namespace opt {
@@ -25,9 +26,9 @@ namespace opt {
 namespace eliminatedeadfunctionsutil {
 
 // Removes all of the function's instructions, removes the function from the
-// module, and returns the next iterator.
-Module::iterator EliminateFunction(IRContext* context,
-                                   Module::iterator* func_iter);
+// module, and returns the status. The iterator |func_iter| is updated to point
+// to the next function.
+Pass::Status EliminateFunction(IRContext* context, Module::iterator* func_iter);
 
 }  // namespace eliminatedeadfunctionsutil
 }  // namespace opt

@@ -127,7 +127,7 @@ class AggressiveDCEPass : public MemPass {
   bool ProcessGlobalValues();
 
   // Erases functions that are unreachable from the entry points of the module.
-  bool EliminateDeadFunctions();
+  Pass::Status EliminateDeadFunctions();
 
   // For function |func|, mark all Stores to non-function-scope variables
   // and block terminating instructions as live. Recursively mark the values

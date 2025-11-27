@@ -36,9 +36,11 @@ Pass::Status EliminateDeadFunctionsPass::Process() {
   for (auto funcIter = get_module()->begin();
        funcIter != get_module()->end();) {
     if (live_function_set.count(&*funcIter) == 0) {
+      if (eliminatedeadfunctionsutil::EliminateFunction(context(), &funcIter) ==
+          Pass::Status::Failure) {
+        return Pass::Status::Failure;
+      }
       modified = true;
-      funcIter =
-          eliminatedeadfunctionsutil::EliminateFunction(context(), &funcIter);
     } else {
       ++funcIter;
     }

@@ -510,9 +510,12 @@ void IRContext::KillOperandFromDebugInstructions(Instruction* inst) {
         continue;
       auto& operand = it->GetOperand(kDebugFunctionOperandFunctionIndex);
       if (operand.words[0] == id) {
-        operand.words[0] =
-            get_debug_info_mgr()->GetDebugInfoNone()->result_id();
-        get_def_use_mgr()->AnalyzeInstUse(&*it);
+        Instruction* debug_info_none =
+            get_debug_info_mgr()->GetDebugInfoNone();
+        if (debug_info_none) {
+          operand.words[0] = debug_info_none->result_id();
+          get_def_use_mgr()->AnalyzeInstUse(&*it);
+        }
       }
     }
   }
@@ -524,9 +527,12 @@ void IRContext::KillOperandFromDebugInstructions(Instruction* inst) {
         continue;
       auto& operand = it->GetOperand(kDebugGlobalVariableOperandVariableIndex);
       if (operand.words[0] == id) {
-        operand.words[0] =
-            get_debug_info_mgr()->GetDebugInfoNone()->result_id();
-        get_def_use_mgr()->AnalyzeInstUse(&*it);
+        Instruction* debug_info_none =
+            get_debug_info_mgr()->GetDebugInfoNone();
+        if (debug_info_none) {
+          operand.words[0] = debug_info_none->result_id();
+          get_def_use_mgr()->AnalyzeInstUse(&*it);
+        }
       }
     }
   }
