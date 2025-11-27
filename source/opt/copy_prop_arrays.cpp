@@ -642,7 +642,7 @@ bool CopyPropagateArrays::CanUpdateUses(Instruction* original_ptr_inst,
   });
 }
 
-void CopyPropagateArrays::UpdateUses(Instruction* original_ptr_inst,
+bool CopyPropagateArrays::UpdateUses(Instruction* original_ptr_inst,
                                      Instruction* new_ptr_inst) {
   analysis::TypeManager* type_mgr = context()->get_type_mgr();
   analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
@@ -783,6 +783,8 @@ void CopyPropagateArrays::UpdateUses(Instruction* original_ptr_inst,
         uint32_t new_pointer_type_id =
             type_mgr->FindPointerToType(new_pointee_type_id, storage_class);
 
+        if (new_pointer_type_id == 0) return false;
+
         if (new_pointer_type_id != use->type_id()) {
           use->SetResultType(new_pointer_type_id);
           context()->AnalyzeUses(use);
@@ -852,6 +854,7 @@ void CopyPropagateArrays::UpdateUses(Instruction* original_ptr_inst,
         break;
     }
   }
+  return true;
 }
 
 uint32_t CopyPropagateArrays::GetMemberTypeId(
@@ -955,7 +958,7 @@ bool CopyPropagateArrays::MemoryObject::Contains(
   return true;
 }
 
-void CopyPropagateArrays::MemoryObject::BuildConstants() {
+bool CopyPropagateArrays::MemoryObject::BuildConstants() {
   for (auto& entry : access_chain_) {
     if (entry.is_result_id) {
       continue;
@@ -968,10 +971,13 @@ void CopyPropagateArrays::MemoryObject::BuildConstants() {
     analysis::ConstantManager* const_mgr = context->get_constant_mgr();
     const analysis::Constant* index_const =
         const_mgr->GetConstant(uint32_type, {entry.immediate});
-    entry.result_id =
-        const_mgr->GetDefiningInstruction(index_const)->result_id();
+    if (!index_const) return false;
+    Instruction* constant_inst = const_mgr->GetDefiningInstruction(index_const);
+    if (!constant_inst) return false;
+    entry.result_id = constant_inst->result_id();
     entry.is_result_id = true;
   }
+  return true;
 }
 
 }  // namespace opt

@@ -118,7 +118,8 @@ class CopyPropagateArrays : public MemPass {
 
     // Converts all immediate values in the AccessChain their OpConstant
     // equivalent.
-    void BuildConstants();
+    // Returns false if the constants could not be created.
+    bool BuildConstants();
 
     // Returns the type id of the pointer type that can be used to point to this
     // memory object.
@@ -241,7 +242,7 @@ class CopyPropagateArrays : public MemPass {
   // types of other instructions as needed.  This function should not be called
   // if |CanUpdateUses(original_ptr_inst, new_pointer_inst->type_id())| returns
   // false.
-  void UpdateUses(Instruction* original_ptr_inst,
+  bool UpdateUses(Instruction* original_ptr_inst,
                   Instruction* new_pointer_inst);
 
   // Return true if |UpdateUses| is able to change all of the uses of
