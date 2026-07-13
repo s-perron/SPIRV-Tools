@@ -48,8 +48,8 @@ jobs:
       - name: Push changes and create PR
         if: steps.update_dependencies.outputs.changed == 'true'
         run: |
-          git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
-          git push --force --set-upstream origin roll_deps
+          auth_header=$(printf "x-access-token:%s" "$GITHUB_TOKEN" | base64 -w 0)
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $auth_header" push --force --set-upstream origin roll_deps
           # Create a PR. If it aready exists, the command fails, so ignore the return code.
           gh pr create --base main -f || true 
           # Add the 'kokoro:run' label so that the kokoro tests will be run.
