@@ -7,14 +7,14 @@ vars = {
 
   'effcee_revision': '910ed15722d5d05c9d71ecf36c1a22243cb79b02',
 
-  'googletest_revision': '3ff51c3e80f2c2eb105d43ecb9acab9a62e01600',
+  'googletest_revision': 'a0f06a70e3da7afa88da9527c43951bca1f7cef2',
 
   # Use a recent protobuf, which can depend on abseil
   'protobuf_revision': '35cd01f9fe9afbeea38cc7b979a3b6bfcde82c03',
 
   're2_revision': '972a15cedd008d846f1a39b2e88ce48d7f166cbd',
 
-  'spirv_headers_revision': '29981f65241605e08b0ede4cfeb999fe3b723c6a',
+  'spirv_headers_revision': '4015a331f5ffd6fc5c6fa7b03e08fb4a692491d7',
 
   'mimalloc_revision': 'a3ca0e5e2eb283c2c9275f30872e30252a91b66c',
 }
